@@ -1,0 +1,85 @@
+name: gestion-documental
+
+# ============================================================
+#  Orquestacion de las 3 bases de datos del sistema.
+#  Cada modulo tendra su propia base, en su propio contenedor.
+#  EJECUTA SIEMPRE DESDE ESTA CARPETA (docker):
+#      docker compose up -d
+# ============================================================
+
+services:
+
+  # ---------- SQL Server : Modulo Central (.NET) ----------
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: gd_sqlserver
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD}
+      MSSQL_PID: ${MSSQL_PID}
+    ports:
+      - "${MSSQL_PORT}:1433"
+    volumes:
+      - mssql_data:/var/opt/mssql            # datos persistentes
+    networks:
+      - docnet
+    restart: unless-stopped
+    # El healthcheck de SQL Server lo afinamos en la fase de Docker.
+    # Por ahora solo necesitamos que el contenedor levante.
+
+  # ---------- PostgreSQL : Modulo de Consulta (PHP) ----------
+  postgres:
+    image: postgres:16
+    container_name: gd_postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "${POSTGRES_PORT}:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data                 # datos persistentes
+      - ../db/postgres:/docker-entrypoint-initdb.d:ro    # scripts de init (fase 2)
+    networks:
+      - docnet
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  # ---------- MongoDB : Modulo de Indexacion (Node) ----------
+  mongo:
+    image: mongo:7
+    container_name: gd_mongo
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD}
+      MONGO_INITDB_DATABASE: ${MONGO_INITDB_DATABASE}
+    ports:
+      - "${MONGO_PORT}:27017"
+    volumes:
+      - mongo_data:/data/db                            # datos persistentes
+      - ../db/mongo:/docker-entrypoint-initdb.d:ro     # scripts de init (fase 2)
+    networks:
+      - docnet
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --quiet -u $${MONGO_INITDB_ROOT_USERNAME} -p $${MONGO_INITDB_ROOT_PASSWORD} --authenticationDatabase admin --eval 'db.adminCommand({ ping: 1 })' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
+# ---------- Volumenes con nombre (datos persistentes) ----------
+volumes:
+  mssql_data:
+  pg_data:
+  mongo_data:
+
+# ---------- Red interna compartida por todos los servicios ----------
+networks:
+  docnet:
+    driver: bridge

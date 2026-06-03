@@ -1,0 +1,30 @@
+# Variables de entorno con secretos (el .env.example si se sube)
+.env
+
+# .NET
+bin/
+obj/
+*.user
+
+# Node.js / TypeScript
+node_modules/
+dist/
+npm-debug.log*
+
+# PHP / Composer
+vendor/
+
+# Logs
+*.log
+
+# Archivos subidos en tiempo de ejecucion (se manejan por volumenes)
+uploads/
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+
+# Editores / IDE
+.vs/
+.vscode/
+.idea/
