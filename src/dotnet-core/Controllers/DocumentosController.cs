@@ -271,6 +271,15 @@ public class DocumentosController : Controller
             FechaHora = DateTime.UtcNow
         });
 
+        _db.Notificaciones.Add(new Notificacion
+        {
+            IdUsuario = version.IdUsuarioSubio,
+            Mensaje = $"Tu documento \"{doc.Titulo}\" (v{version.NumeroVersion}) fue APROBADO.",
+            IdVersion = version.IdVersion,
+            Leida = false,
+            FechaCreacion = DateTime.UtcNow
+        });
+
         await _db.SaveChangesAsync();
         return RedirectToAction("Detalle", new { id = version.IdDocumento });
     }
@@ -308,6 +317,15 @@ public class DocumentosController : Controller
             Tipo = "RECHAZO",
             Comentario = comentario.Trim(),
             FechaHora = DateTime.UtcNow
+        });
+
+        _db.Notificaciones.Add(new Notificacion
+        {
+            IdUsuario = version.IdUsuarioSubio,
+            Mensaje = $"Tu documento \"{doc.Titulo}\" (v{version.NumeroVersion}) fue RECHAZADO: {comentario.Trim()}",
+            IdVersion = version.IdVersion,
+            Leida = false,
+            FechaCreacion = DateTime.UtcNow
         });
 
         await _db.SaveChangesAsync();

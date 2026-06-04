@@ -1,0 +1,38 @@
+@model List<Central.Models.Notificacion>
+@{
+    ViewData["Title"] = "Notificaciones";
+}
+
+<div class="card">
+    <h2>Notificaciones</h2>
+
+    @if (Model.Any(n => !n.Leida))
+    {
+        <form method="post" asp-action="MarcarTodas" style="margin-bottom:12px;">
+            <button type="submit" class="btn">Marcar todas como leidas</button>
+        </form>
+    }
+
+    @if (!Model.Any())
+    {
+        <p>No tienes notificaciones.</p>
+    }
+    else
+    {
+        <table>
+            <thead>
+                <tr><th></th><th>Mensaje</th><th>Fecha</th></tr>
+            </thead>
+            <tbody>
+                @foreach (var n in Model)
+                {
+                    <tr style="@(n.Leida ? "" : "font-weight:600;")">
+                        <td>@(n.Leida ? "" : "●")</td>
+                        <td><a asp-action="Abrir" asp-route-id="@n.IdNotificacion">@n.Mensaje</a></td>
+                        <td>@n.FechaCreacion.ToString("yyyy-MM-dd HH:mm")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</div>

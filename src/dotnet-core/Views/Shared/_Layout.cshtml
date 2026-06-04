@@ -48,6 +48,7 @@
         <nav class="menu">
             <a asp-controller="Home" asp-action="Index">Inicio</a>
             <a asp-controller="Documentos" asp-action="Index">Documentos</a>
+            @await Component.InvokeAsync("NotificacionesBadge")
             @if (User.IsInRole("Admin"))
             {
                 <a asp-controller="Usuarios" asp-action="Index">Usuarios</a>

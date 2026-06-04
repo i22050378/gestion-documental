@@ -15,4 +15,5 @@ public class CentralDbContext : DbContext
     public DbSet<Documento> Documentos => Set<Documento>();
     public DbSet<DocumentoVersion> Versiones => Set<DocumentoVersion>();
     public DbSet<Revision> Revisiones => Set<Revision>();
+    public DbSet<Notificacion> Notificaciones => Set<Notificacion>();
 }
