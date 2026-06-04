@@ -6,21 +6,34 @@
     <title>@ViewData["Title"] - Gestion Documental</title>
     <style>
         body { font-family: system-ui, sans-serif; margin: 0; background: #f5f5f4; color: #1c1c1a; }
-        header { background: #2d2b55; color: #fff; padding: 16px 24px; }
-        header h1 { margin: 0; font-size: 20px; }
+        header { background: #2d2b55; color: #fff; padding: 14px 24px; display: flex; justify-content: space-between; align-items: center; }
+        header h1 { margin: 0; font-size: 19px; }
+        header .user { font-size: 14px; }
+        header .user form { display: inline; margin-left: 10px; }
+        header .user button.link { color: #cfcdf0; background: none; border: none; cursor: pointer; font-size: 14px; text-decoration: underline; padding: 0; }
         main { max-width: 900px; margin: 24px auto; padding: 0 16px; }
         h2 { font-size: 17px; margin-top: 0; }
-        table { border-collapse: collapse; width: 100%; background: #fff; }
-        th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid #e5e5e5; font-size: 14px; }
-        th { background: #efeef7; }
         .ok { color: #166534; font-weight: 600; }
-        .err { color: #991b1b; font-weight: 600; }
+        .err { color: #991b1b; font-weight: 600; font-size: 13px; }
         .card { background: #fff; border: 1px solid #e5e5e5; border-radius: 8px; padding: 16px; margin-bottom: 20px; }
-        pre { white-space: pre-wrap; background: #fafaf9; padding: 10px; border-radius: 6px; }
+        .input { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; }
+        .btn { background: #2d2b55; color: #fff; border: none; padding: 9px 18px; border-radius: 6px; cursor: pointer; font-size: 14px; }
+        label { font-size: 14px; }
     </style>
 </head>
 <body>
-    <header><h1>Sistema de Gestion Documental</h1></header>
+    <header>
+        <h1>Sistema de Gestion Documental</h1>
+        @if (User.Identity?.IsAuthenticated == true)
+        {
+            <span class="user">
+                @User.Identity.Name
+                <form method="post" asp-controller="Account" asp-action="Logout">
+                    <button type="submit" class="link">Cerrar sesion</button>
+                </form>
+            </span>
+        }
+    </header>
     <main>
         @RenderBody()
     </main>

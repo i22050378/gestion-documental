@@ -1,61 +1,10 @@
-@model Central.Models.HomeViewModel
 @{
     ViewData["Title"] = "Inicio";
 }
 
 <div class="card">
-    <h2>Estado de la conexion a SQL Server</h2>
-    @if (Model.Conectado)
-    {
-        <p class="ok">Conectado correctamente a la base CentralDB.</p>
-    }
-    else
-    {
-        <p class="err">No se pudo conectar a la base de datos.</p>
-        <pre>@Model.Error</pre>
-    }
+    <h2>Bienvenido, @ViewData["Nombre"]</h2>
+    <p>Rol: <strong>@ViewData["Rol"]</strong></p>
+    <p>Empresa: <strong>@ViewData["Empresa"]</strong></p>
+    <p>Iniciaste sesion correctamente. Desde aqui iremos construyendo el resto del sistema (gestion de usuarios, documentos, aprobaciones, etc.).</p>
 </div>
-
-@if (Model.Conectado)
-{
-    <div class="card">
-        <h2>Roles (@Model.Roles.Count)</h2>
-        <table>
-            <thead>
-                <tr><th>Id</th><th>Nombre</th><th>Nivel</th><th>Descripcion</th></tr>
-            </thead>
-            <tbody>
-                @foreach (var r in Model.Roles)
-                {
-                    <tr>
-                        <td>@r.IdRol</td>
-                        <td>@r.Nombre</td>
-                        <td>@r.Nivel</td>
-                        <td>@r.Descripcion</td>
-                    </tr>
-                }
-            </tbody>
-        </table>
-    </div>
-
-    <div class="card">
-        <h2>Usuarios (@Model.Usuarios.Count)</h2>
-        <table>
-            <thead>
-                <tr><th>Id</th><th>Nombre</th><th>Correo</th><th>Rol</th><th>Empresa</th></tr>
-            </thead>
-            <tbody>
-                @foreach (var u in Model.Usuarios)
-                {
-                    <tr>
-                        <td>@u.IdUsuario</td>
-                        <td>@u.NombreCompleto</td>
-                        <td>@u.Correo</td>
-                        <td>@(u.Rol?.Nombre)</td>
-                        <td>@(u.Empresa?.Nombre ?? "(global)")</td>
-                    </tr>
-                }
-            </tbody>
-        </table>
-    </div>
-}

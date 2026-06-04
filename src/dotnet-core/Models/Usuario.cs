@@ -17,7 +17,6 @@ public class Usuario
     public DateTime FechaCreacion { get; set; }
     public DateTime? UltimoAcceso { get; set; }
 
-    // Relaciones (la columna que las une se indica con ForeignKey)
     [ForeignKey(nameof(IdRol))]
     public Rol? Rol { get; set; }
 

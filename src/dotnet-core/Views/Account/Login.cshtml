@@ -1,0 +1,27 @@
+@model Central.Models.LoginViewModel
+@{
+    ViewData["Title"] = "Iniciar sesion";
+}
+
+<div class="card" style="max-width: 380px; margin: 40px auto;">
+    <h2>Iniciar sesion</h2>
+
+    @if (!string.IsNullOrEmpty(Model.Error))
+    {
+        <p class="err">@Model.Error</p>
+    }
+
+    <form method="post" asp-controller="Account" asp-action="Login">
+        <div style="margin-bottom: 12px;">
+            <label>Correo</label>
+            <input asp-for="Correo" class="input" />
+            <span asp-validation-for="Correo" class="err"></span>
+        </div>
+        <div style="margin-bottom: 16px;">
+            <label>Contrasena</label>
+            <input asp-for="Contrasena" type="password" class="input" />
+            <span asp-validation-for="Contrasena" class="err"></span>
+        </div>
+        <button type="submit" class="btn">Entrar</button>
+    </form>
+</div>
