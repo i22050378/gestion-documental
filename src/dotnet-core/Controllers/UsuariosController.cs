@@ -7,7 +7,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Central.Controllers;
 
-[Authorize(Roles = "Admin")]   // solo el Admin
+[Authorize(Roles = "Admin")]
 public class UsuariosController : Controller
 {
     private readonly CentralDbContext _db;
@@ -156,7 +156,6 @@ public class UsuariosController : Controller
         return rol != null && rol.Nombre == "Admin";
     }
 
-    // Si el rol es Admin, la empresa es null; si no, se respeta la elegida.
     private async Task<int?> ResolverEmpresaAsync(UsuarioFormViewModel vm)
     {
         return await EsRolAdminAsync(vm.IdRol) ? null : vm.IdEmpresa;

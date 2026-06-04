@@ -1,0 +1,106 @@
+@model Central.Models.DocumentoDetalleViewModel
+@{
+    ViewData["Title"] = "Documento";
+}
+
+@if (TempData["Error"] != null)
+{
+    <p class="err">@TempData["Error"]</p>
+}
+
+<div class="card">
+    <h2>@Model.Titulo <span class="badge">@Model.EstadoUltima</span></h2>
+    @if (!string.IsNullOrWhiteSpace(Model.Descripcion))
+    {
+        <p>@Model.Descripcion</p>
+    }
+    <p style="font-size:13px;color:#555;">
+        Categoria: <strong>@Model.Categoria</strong> &nbsp;·&nbsp;
+        Empresa: <strong>@Model.Empresa</strong> &nbsp;·&nbsp;
+        Creado por: <strong>@Model.Creador</strong> &nbsp;·&nbsp;
+        @Model.FechaCreacion.ToString("yyyy-MM-dd")
+    </p>
+    <a asp-action="Index">&larr; Volver a la lista</a>
+</div>
+
+@if (Model.PuedeAprobar)
+{
+    <div class="card">
+        <h2>Revisar (Director)</h2>
+        <p>La version mas reciente esta <strong>Pendiente</strong>. Puedes aprobarla o rechazarla.</p>
+        <form method="post" asp-action="Aprobar">
+            <input type="hidden" name="idVersion" value="@Model.IdUltimaVersion" />
+            <button type="submit" class="btn">Aprobar</button>
+        </form>
+        <hr style="margin:14px 0; border:none; border-top:1px solid #eee;" />
+        <form method="post" asp-action="Rechazar">
+            <input type="hidden" name="idVersion" value="@Model.IdUltimaVersion" />
+            <label>Motivo del rechazo</label>
+            <textarea name="comentario" class="input" rows="3" placeholder="Explica que debe corregirse"></textarea>
+            <div style="margin-top:8px;">
+                <button type="submit" class="btn" style="background:#991b1b;">Rechazar</button>
+            </div>
+        </form>
+    </div>
+}
+
+@if (Model.PuedeSubirNueva)
+{
+    <div class="card">
+        <h2>Subir nueva version</h2>
+        <p>La ultima version fue <strong>rechazada</strong>. Sube el archivo corregido; quedara como nueva version en estado Pendiente.</p>
+        <form method="post" asp-action="NuevaVersion" enctype="multipart/form-data">
+            <input type="hidden" name="idDocumento" value="@Model.IdDocumento" />
+            <input type="file" name="archivo" class="input" />
+            <div style="margin-top:8px;">
+                <button type="submit" class="btn">Subir nueva version</button>
+            </div>
+            <div style="font-size:12px;color:#666;margin-top:4px;">Permitidos: pdf, doc, docx, xls, xlsx, png, jpg, jpeg, txt, dwg</div>
+        </form>
+    </div>
+}
+
+<div class="card">
+    <h2>Versiones</h2>
+    <table>
+        <thead>
+            <tr><th>Version</th><th>Estado</th><th>Subio</th><th>Fecha</th><th>Tamano</th><th></th></tr>
+        </thead>
+        <tbody>
+            @foreach (var v in Model.Versiones)
+            {
+                <tr>
+                    <td>v@(v.NumeroVersion) @(v.EsVigente ? "(vigente)" : "")</td>
+                    <td><span class="badge">@v.Estado</span></td>
+                    <td>@v.SubioPor</td>
+                    <td>@v.FechaSubida.ToString("yyyy-MM-dd HH:mm")</td>
+                    <td>@(v.TamanoBytes / 1024) KB</td>
+                    <td><a asp-action="Descargar" asp-route-idVersion="@v.IdVersion">Descargar</a></td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+@if (Model.Revisiones.Any())
+{
+    <div class="card">
+        <h2>Historial de revisiones</h2>
+        <table>
+            <thead>
+                <tr><th>Tipo</th><th>Comentario</th><th>Por</th><th>Fecha</th></tr>
+            </thead>
+            <tbody>
+                @foreach (var r in Model.Revisiones)
+                {
+                    <tr>
+                        <td>@r.Tipo</td>
+                        <td>@r.Comentario</td>
+                        <td>@r.Usuario</td>
+                        <td>@r.FechaHora.ToString("yyyy-MM-dd HH:mm")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}

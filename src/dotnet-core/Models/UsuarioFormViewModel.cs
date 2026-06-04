@@ -4,7 +4,7 @@ namespace Central.Models;
 
 public class UsuarioFormViewModel
 {
-    public int IdUsuario { get; set; }   // 0 = nuevo
+    public int IdUsuario { get; set; }
 
     [Required(ErrorMessage = "Ingresa el nombre")]
     public string NombreCompleto { get; set; } = "";
@@ -13,18 +13,17 @@ public class UsuarioFormViewModel
     [EmailAddress(ErrorMessage = "Correo no valido")]
     public string Correo { get; set; } = "";
 
-    public string? Contrasena { get; set; }   // obligatoria al crear; opcional al editar
+    public string? Contrasena { get; set; }
 
     [Required(ErrorMessage = "Elige un rol")]
     public int IdRol { get; set; }
 
-    public int? IdEmpresa { get; set; }        // vacio si el rol es Admin
+    public int? IdEmpresa { get; set; }
 
     public bool Activo { get; set; } = true;
 
     public string? Error { get; set; }
 
-    // Datos para los menus desplegables
     public List<Rol> Roles { get; set; } = new();
     public List<Empresa> Empresas { get; set; } = new();
 }

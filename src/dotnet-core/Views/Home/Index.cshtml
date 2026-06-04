@@ -9,10 +9,14 @@
 
     @if (User.IsInRole("Admin"))
     {
-        <p>Como Admin, usa el menu de arriba para gestionar <strong>Usuarios</strong> y <strong>Empresas</strong>.</p>
+        <p>Como Admin, usa el menu de arriba para gestionar <strong>Usuarios</strong> y <strong>Empresas</strong>, y para ver los <strong>Documentos</strong> de todas las empresas.</p>
+    }
+    else if (User.IsInRole("Supervisor") || User.IsInRole("Director"))
+    {
+        <p>Entra a <strong>Documentos</strong> para crear y subir documentos de tu empresa.</p>
     }
     else
     {
-        <p>Iniciaste sesion correctamente. Aqui iremos agregando documentos y el flujo de aprobacion.</p>
+        <p>Entra a <strong>Documentos</strong> para consultar y descargar los documentos de tu empresa.</p>
     }
 </div>

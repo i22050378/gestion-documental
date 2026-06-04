@@ -1,0 +1,390 @@
+using System.Security.Claims;
+using Central.Data;
+using Central.Models;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+
+namespace Central.Controllers;
+
+[Authorize]
+public class DocumentosController : Controller
+{
+    private readonly CentralDbContext _db;
+    public DocumentosController(CentralDbContext db) => _db = db;
+
+    private static readonly string[] ExtensionesPermitidas =
+        { ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".png", ".jpg", ".jpeg", ".txt", ".dwg" };
+
+    private bool EsAdmin => User.IsInRole("Admin");
+
+    private int? EmpresaActual()
+    {
+        var v = User.FindFirst("IdEmpresa")?.Value;
+        return int.TryParse(v, out var id) ? id : (int?)null;
+    }
+
+    private int UsuarioActual()
+    {
+        var v = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        return int.TryParse(v, out var id) ? id : 0;
+    }
+
+    private async Task<int> EstadoIdAsync(string nombre) =>
+        await _db.Estados.Where(e => e.Nombre == nombre).Select(e => e.IdEstado).FirstAsync();
+
+    // ---------- Lista ----------
+    public async Task<IActionResult> Index()
+    {
+        var idEmpresa = EmpresaActual();
+        var esAdmin = EsAdmin;
+
+        var estados = await _db.Estados.ToDictionaryAsync(e => e.IdEstado, e => e.Nombre);
+
+        var docs = await _db.Documentos
+            .Where(d => d.Activo && (esAdmin || d.IdEmpresa == idEmpresa))
+            .OrderByDescending(d => d.IdDocumento)
+            .Select(d => new DocumentoListItem
+            {
+                IdDocumento = d.IdDocumento,
+                Titulo = d.Titulo,
+                Categoria = d.Categoria!.Nombre,
+                Creador = d.Creador!.NombreCompleto,
+                Empresa = d.Empresa!.Nombre,
+                FechaCreacion = d.FechaCreacion,
+                UltimaVersion = d.Versiones.OrderByDescending(v => v.NumeroVersion)
+                                           .Select(v => v.NumeroVersion).FirstOrDefault(),
+                IdEstadoUltima = d.Versiones.OrderByDescending(v => v.NumeroVersion)
+                                            .Select(v => v.IdEstado).FirstOrDefault(),
+                IdUltimaVersion = d.Versiones.OrderByDescending(v => v.NumeroVersion)
+                                             .Select(v => v.IdVersion).FirstOrDefault()
+            })
+            .ToListAsync();
+
+        foreach (var d in docs)
+            d.Estado = estados.GetValueOrDefault(d.IdEstadoUltima, "");
+
+        ViewData["EsAdmin"] = esAdmin;
+        return View(docs);
+    }
+
+    // ---------- Detalle (info + versiones + revisiones + acciones) ----------
+    public async Task<IActionResult> Detalle(int id)
+    {
+        var idEmpresa = EmpresaActual();
+        var esAdmin = EsAdmin;
+
+        var doc = await _db.Documentos
+            .Where(d => d.IdDocumento == id && d.Activo)
+            .Select(d => new
+            {
+                d.IdDocumento,
+                d.IdEmpresa,
+                d.Titulo,
+                d.Descripcion,
+                d.FechaCreacion,
+                Categoria = d.Categoria!.Nombre,
+                Empresa = d.Empresa!.Nombre,
+                Creador = d.Creador!.NombreCompleto
+            })
+            .FirstOrDefaultAsync();
+
+        if (doc == null) return NotFound();
+        if (!esAdmin && doc.IdEmpresa != idEmpresa) return Forbid();
+
+        var estados = await _db.Estados.ToDictionaryAsync(e => e.IdEstado, e => e.Nombre);
+        var usuarios = await _db.Usuarios.ToDictionaryAsync(u => u.IdUsuario, u => u.NombreCompleto);
+
+        var versionesRaw = await _db.Versiones
+            .Where(v => v.IdDocumento == id)
+            .OrderByDescending(v => v.NumeroVersion)
+            .Select(v => new { v.IdVersion, v.NumeroVersion, v.IdEstado, v.IdUsuarioSubio, v.FechaSubida, v.TamanoBytes })
+            .ToListAsync();
+
+        var versionIds = versionesRaw.Select(v => v.IdVersion).ToList();
+
+        var revisionesRaw = await _db.Revisiones
+            .Where(r => versionIds.Contains(r.IdVersion))
+            .OrderByDescending(r => r.FechaHora)
+            .Select(r => new { r.Tipo, r.Comentario, r.IdUsuario, r.FechaHora })
+            .ToListAsync();
+
+        var vm = new DocumentoDetalleViewModel
+        {
+            IdDocumento = doc.IdDocumento,
+            Titulo = doc.Titulo,
+            Descripcion = doc.Descripcion,
+            Categoria = doc.Categoria,
+            Empresa = doc.Empresa,
+            Creador = doc.Creador,
+            FechaCreacion = doc.FechaCreacion
+        };
+
+        foreach (var v in versionesRaw)
+        {
+            var nombreEstado = estados.GetValueOrDefault(v.IdEstado, "");
+            vm.Versiones.Add(new VersionRow
+            {
+                IdVersion = v.IdVersion,
+                NumeroVersion = v.NumeroVersion,
+                Estado = nombreEstado,
+                SubioPor = usuarios.GetValueOrDefault(v.IdUsuarioSubio, ""),
+                FechaSubida = v.FechaSubida,
+                TamanoBytes = v.TamanoBytes,
+                EsVigente = nombreEstado == "Aprobado"
+            });
+        }
+
+        foreach (var r in revisionesRaw)
+        {
+            vm.Revisiones.Add(new RevisionRow
+            {
+                Tipo = r.Tipo,
+                Comentario = r.Comentario,
+                Usuario = usuarios.GetValueOrDefault(r.IdUsuario, ""),
+                FechaHora = r.FechaHora
+            });
+        }
+
+        var ultima = vm.Versiones.FirstOrDefault();  // mayor NumeroVersion
+        if (ultima != null)
+        {
+            vm.IdUltimaVersion = ultima.IdVersion;
+            vm.EstadoUltima = ultima.Estado;
+        }
+
+        bool mismaEmpresa = doc.IdEmpresa == idEmpresa;
+        vm.PuedeAprobar = User.IsInRole("Director") && mismaEmpresa && vm.EstadoUltima == "Pendiente";
+        vm.PuedeSubirNueva = (User.IsInRole("Supervisor") || User.IsInRole("Director"))
+                             && mismaEmpresa && vm.EstadoUltima == "Rechazado";
+
+        return View(vm);
+    }
+
+    // ---------- Crear documento (version 1) ----------
+    [HttpGet]
+    [Authorize(Roles = "Supervisor,Director")]
+    public async Task<IActionResult> Create()
+    {
+        var vm = new DocumentoFormViewModel
+        {
+            Categorias = await _db.Categorias.OrderBy(c => c.Nombre).ToListAsync()
+        };
+        return View(vm);
+    }
+
+    [HttpPost]
+    [Authorize(Roles = "Supervisor,Director")]
+    public async Task<IActionResult> Create(DocumentoFormViewModel vm)
+    {
+        vm.Categorias = await _db.Categorias.OrderBy(c => c.Nombre).ToListAsync();
+
+        if (vm.Archivo == null || vm.Archivo.Length == 0)
+            ModelState.AddModelError(nameof(vm.Archivo), "Selecciona un archivo");
+
+        if (!ModelState.IsValid)
+            return View(vm);
+
+        var extension = Path.GetExtension(vm.Archivo!.FileName).ToLowerInvariant();
+        if (!ExtensionesPermitidas.Contains(extension))
+        {
+            vm.Error = "Tipo de archivo no permitido. Permitidos: " + string.Join(", ", ExtensionesPermitidas);
+            return View(vm);
+        }
+
+        var idEmpresa = EmpresaActual();
+        if (idEmpresa == null)
+        {
+            vm.Error = "Tu usuario no tiene una empresa asignada.";
+            return View(vm);
+        }
+
+        var idPendiente = await EstadoIdAsync("Pendiente");
+
+        using var ms = new MemoryStream();
+        await vm.Archivo.CopyToAsync(ms);
+        var bytes = ms.ToArray();
+        int usuario = UsuarioActual();
+
+        var documento = new Documento
+        {
+            IdEmpresa = idEmpresa.Value,
+            IdCategoria = vm.IdCategoria,
+            IdUsuarioCreador = usuario,
+            Titulo = vm.Titulo,
+            Descripcion = vm.Descripcion,
+            Activo = true,
+            FechaCreacion = DateTime.UtcNow
+        };
+        documento.Versiones.Add(new DocumentoVersion
+        {
+            NumeroVersion = 1,
+            IdEstado = idPendiente,
+            IdUsuarioSubio = usuario,
+            NombreArchivo = Path.GetFileName(vm.Archivo.FileName),
+            Extension = extension,
+            TamanoBytes = bytes.LongLength,
+            Archivo = bytes,
+            FechaSubida = DateTime.UtcNow,
+            Activo = true
+        });
+
+        _db.Documentos.Add(documento);
+        await _db.SaveChangesAsync();
+        return RedirectToAction("Index");
+    }
+
+    // ---------- Aprobar (Director) ----------
+    [HttpPost]
+    [Authorize(Roles = "Director")]
+    public async Task<IActionResult> Aprobar(int idVersion)
+    {
+        var version = await _db.Versiones.FirstOrDefaultAsync(v => v.IdVersion == idVersion);
+        if (version == null) return NotFound();
+
+        var doc = await _db.Documentos.FirstOrDefaultAsync(d => d.IdDocumento == version.IdDocumento);
+        if (doc == null) return NotFound();
+        if (doc.IdEmpresa != EmpresaActual()) return Forbid();
+
+        var idPendiente = await EstadoIdAsync("Pendiente");
+        if (version.IdEstado != idPendiente)
+            return RedirectToAction("Detalle", new { id = version.IdDocumento });
+
+        var idAprobado = await EstadoIdAsync("Aprobado");
+        var idObsoleto = await EstadoIdAsync("Obsoleto");
+
+        // La version aprobada anterior (si existe) pasa a Obsoleto
+        await _db.Versiones
+            .Where(v => v.IdDocumento == doc.IdDocumento && v.IdEstado == idAprobado && v.IdVersion != version.IdVersion)
+            .ExecuteUpdateAsync(s => s.SetProperty(v => v.IdEstado, idObsoleto));
+
+        version.IdEstado = idAprobado;
+        version.IdUsuarioRevisor = UsuarioActual();
+        version.FechaRevision = DateTime.UtcNow;
+
+        _db.Revisiones.Add(new Revision
+        {
+            IdVersion = version.IdVersion,
+            IdUsuario = UsuarioActual(),
+            Tipo = "APROBACION",
+            Comentario = null,
+            FechaHora = DateTime.UtcNow
+        });
+
+        await _db.SaveChangesAsync();
+        return RedirectToAction("Detalle", new { id = version.IdDocumento });
+    }
+
+    // ---------- Rechazar (Director) ----------
+    [HttpPost]
+    [Authorize(Roles = "Director")]
+    public async Task<IActionResult> Rechazar(int idVersion, string? comentario)
+    {
+        var version = await _db.Versiones.FirstOrDefaultAsync(v => v.IdVersion == idVersion);
+        if (version == null) return NotFound();
+
+        var doc = await _db.Documentos.FirstOrDefaultAsync(d => d.IdDocumento == version.IdDocumento);
+        if (doc == null) return NotFound();
+        if (doc.IdEmpresa != EmpresaActual()) return Forbid();
+
+        var idPendiente = await EstadoIdAsync("Pendiente");
+        if (version.IdEstado != idPendiente)
+            return RedirectToAction("Detalle", new { id = version.IdDocumento });
+
+        if (string.IsNullOrWhiteSpace(comentario))
+        {
+            TempData["Error"] = "Debes escribir el motivo del rechazo.";
+            return RedirectToAction("Detalle", new { id = version.IdDocumento });
+        }
+
+        version.IdEstado = await EstadoIdAsync("Rechazado");
+        version.IdUsuarioRevisor = UsuarioActual();
+        version.FechaRevision = DateTime.UtcNow;
+
+        _db.Revisiones.Add(new Revision
+        {
+            IdVersion = version.IdVersion,
+            IdUsuario = UsuarioActual(),
+            Tipo = "RECHAZO",
+            Comentario = comentario.Trim(),
+            FechaHora = DateTime.UtcNow
+        });
+
+        await _db.SaveChangesAsync();
+        return RedirectToAction("Detalle", new { id = version.IdDocumento });
+    }
+
+    // ---------- Subir nueva version (cuando la ultima fue rechazada) ----------
+    [HttpPost]
+    [Authorize(Roles = "Supervisor,Director")]
+    public async Task<IActionResult> NuevaVersion(int idDocumento, IFormFile? archivo)
+    {
+        var doc = await _db.Documentos.FirstOrDefaultAsync(d => d.IdDocumento == idDocumento && d.Activo);
+        if (doc == null) return NotFound();
+        if (doc.IdEmpresa != EmpresaActual()) return Forbid();
+
+        var ultima = await _db.Versiones
+            .Where(v => v.IdDocumento == idDocumento)
+            .OrderByDescending(v => v.NumeroVersion)
+            .Select(v => new { v.NumeroVersion, v.IdEstado })
+            .FirstOrDefaultAsync();
+
+        var idRechazado = await EstadoIdAsync("Rechazado");
+        if (ultima == null || ultima.IdEstado != idRechazado)
+        {
+            TempData["Error"] = "Solo puedes subir una nueva version cuando la ultima fue rechazada.";
+            return RedirectToAction("Detalle", new { id = idDocumento });
+        }
+
+        if (archivo == null || archivo.Length == 0)
+        {
+            TempData["Error"] = "Selecciona un archivo.";
+            return RedirectToAction("Detalle", new { id = idDocumento });
+        }
+
+        var extension = Path.GetExtension(archivo.FileName).ToLowerInvariant();
+        if (!ExtensionesPermitidas.Contains(extension))
+        {
+            TempData["Error"] = "Tipo de archivo no permitido.";
+            return RedirectToAction("Detalle", new { id = idDocumento });
+        }
+
+        var idPendiente = await EstadoIdAsync("Pendiente");
+
+        using var ms = new MemoryStream();
+        await archivo.CopyToAsync(ms);
+        var bytes = ms.ToArray();
+
+        _db.Versiones.Add(new DocumentoVersion
+        {
+            IdDocumento = idDocumento,
+            NumeroVersion = ultima.NumeroVersion + 1,
+            IdEstado = idPendiente,
+            IdUsuarioSubio = UsuarioActual(),
+            NombreArchivo = Path.GetFileName(archivo.FileName),
+            Extension = extension,
+            TamanoBytes = bytes.LongLength,
+            Archivo = bytes,
+            FechaSubida = DateTime.UtcNow,
+            Activo = true
+        });
+
+        await _db.SaveChangesAsync();
+        return RedirectToAction("Detalle", new { id = idDocumento });
+    }
+
+    // ---------- Descargar archivo de una version ----------
+    public async Task<IActionResult> Descargar(int idVersion)
+    {
+        var v = await _db.Versiones
+            .Include(x => x.Documento)
+            .FirstOrDefaultAsync(x => x.IdVersion == idVersion);
+
+        if (v == null || v.Documento == null) return NotFound();
+
+        if (!EsAdmin && v.Documento.IdEmpresa != EmpresaActual())
+            return Forbid();
+
+        return File(v.Archivo, "application/octet-stream", v.NombreArchivo);
+    }
+}

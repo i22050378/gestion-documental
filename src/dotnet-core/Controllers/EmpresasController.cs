@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Central.Controllers;
 
-[Authorize(Roles = "Admin")]   // solo el Admin
+[Authorize(Roles = "Admin")]
 public class EmpresasController : Controller
 {
     private readonly CentralDbContext _db;
@@ -27,8 +27,7 @@ public class EmpresasController : Controller
         if (!ModelState.IsValid)
             return View(vm);
 
-        bool existe = await _db.Empresas.AnyAsync(e => e.Nombre == vm.Nombre);
-        if (existe)
+        if (await _db.Empresas.AnyAsync(e => e.Nombre == vm.Nombre))
         {
             vm.Error = "Ya existe una empresa con ese nombre.";
             return View(vm);

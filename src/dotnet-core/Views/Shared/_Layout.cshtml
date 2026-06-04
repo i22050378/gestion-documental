@@ -14,7 +14,7 @@
         nav.menu { background: #3b3866; padding: 8px 24px; }
         nav.menu a { color: #cfcdf0; margin-right: 18px; text-decoration: none; font-size: 14px; }
         nav.menu a:hover { text-decoration: underline; }
-        main { max-width: 920px; margin: 24px auto; padding: 0 16px; }
+        main { max-width: 980px; margin: 24px auto; padding: 0 16px; }
         h2 { font-size: 17px; margin-top: 0; }
         .ok { color: #166534; font-weight: 600; }
         .err { color: #991b1b; font-weight: 600; font-size: 13px; }
@@ -26,6 +26,7 @@
         .btn { background: #2d2b55; color: #fff; border: none; padding: 9px 18px; border-radius: 6px; cursor: pointer; font-size: 14px; display: inline-block; text-decoration: none; }
         .link { background: none; border: none; color: #2d2b55; cursor: pointer; text-decoration: underline; font-size: 13px; padding: 0; margin-left: 8px; }
         label { font-size: 14px; }
+        .badge { display:inline-block; padding:2px 8px; border-radius:10px; font-size:12px; background:#efeef7; color:#3b3866; }
     </style>
 </head>
 <body>
@@ -46,6 +47,7 @@
     {
         <nav class="menu">
             <a asp-controller="Home" asp-action="Index">Inicio</a>
+            <a asp-controller="Documentos" asp-action="Index">Documentos</a>
             @if (User.IsInRole("Admin"))
             {
                 <a asp-controller="Usuarios" asp-action="Index">Usuarios</a>

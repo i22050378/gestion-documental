@@ -10,4 +10,9 @@ public class CentralDbContext : DbContext
     public DbSet<Rol> Roles => Set<Rol>();
     public DbSet<Empresa> Empresas => Set<Empresa>();
     public DbSet<Usuario> Usuarios => Set<Usuario>();
+    public DbSet<Categoria> Categorias => Set<Categoria>();
+    public DbSet<Estado> Estados => Set<Estado>();
+    public DbSet<Documento> Documentos => Set<Documento>();
+    public DbSet<DocumentoVersion> Versiones => Set<DocumentoVersion>();
+    public DbSet<Revision> Revisiones => Set<Revision>();
 }

@@ -3,11 +3,10 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace Central.Models;
 
-[Table("Roles")]
-public class Rol
+[Table("Estados")]
+public class Estado
 {
-    [Key] public int IdRol { get; set; }
+    [Key] public int IdEstado { get; set; }
     public string Nombre { get; set; } = "";
-    public int Nivel { get; set; }
     public string? Descripcion { get; set; }
 }

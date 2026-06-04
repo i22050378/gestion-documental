@@ -1,0 +1,40 @@
+@model Central.Models.DocumentoFormViewModel
+@{
+    ViewData["Title"] = "Nuevo documento";
+}
+
+<div class="card" style="max-width: 540px;">
+    <h2>Nuevo documento</h2>
+
+    @if (!string.IsNullOrEmpty(Model.Error))
+    {
+        <p class="err">@Model.Error</p>
+    }
+
+    <form method="post" asp-controller="Documentos" asp-action="Create" enctype="multipart/form-data">
+        <div style="margin-bottom: 10px;">
+            <label>Titulo</label>
+            <input asp-for="Titulo" class="input" />
+            <span asp-validation-for="Titulo" class="err"></span>
+        </div>
+        <div style="margin-bottom: 10px;">
+            <label>Descripcion (opcional)</label>
+            <input asp-for="Descripcion" class="input" />
+        </div>
+        <div style="margin-bottom: 10px;">
+            <label>Categoria</label>
+            <select asp-for="IdCategoria" class="input" asp-items="@(new SelectList(Model.Categorias, "IdCategoria", "Nombre"))">
+                <option value="">-- elige una categoria --</option>
+            </select>
+            <span asp-validation-for="IdCategoria" class="err"></span>
+        </div>
+        <div style="margin-bottom: 14px;">
+            <label>Archivo</label>
+            <input asp-for="Archivo" type="file" class="input" />
+            <span asp-validation-for="Archivo" class="err"></span>
+            <div style="font-size:12px;color:#666;margin-top:4px;">Permitidos: pdf, doc, docx, xls, xlsx, png, jpg, jpeg, txt, dwg</div>
+        </div>
+        <button type="submit" class="btn">Subir</button>
+        <a asp-action="Index" style="margin-left:10px;">Cancelar</a>
+    </form>
+</div>

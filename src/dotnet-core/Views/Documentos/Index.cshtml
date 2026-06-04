@@ -1,0 +1,55 @@
+@model List<Central.Models.DocumentoListItem>
+@{
+    ViewData["Title"] = "Documentos";
+    bool esAdmin = (bool)(ViewData["EsAdmin"] ?? false);
+    bool puedeCrear = User.IsInRole("Supervisor") || User.IsInRole("Director");
+}
+
+<div class="card">
+    <h2>Documentos</h2>
+
+    @if (puedeCrear)
+    {
+        <p><a class="btn" asp-controller="Documentos" asp-action="Create">Nuevo documento</a></p>
+    }
+
+    @if (!Model.Any())
+    {
+        <p>Aun no hay documentos.</p>
+    }
+    else
+    {
+        <table>
+            <thead>
+                <tr>
+                    <th>Id</th>
+                    <th>Titulo</th>
+                    <th>Categoria</th>
+                    @if (esAdmin) { <th>Empresa</th> }
+                    <th>Creado por</th>
+                    <th>Version</th>
+                    <th>Estado</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var d in Model)
+                {
+                    <tr>
+                        <td>@d.IdDocumento</td>
+                        <td>@d.Titulo</td>
+                        <td>@d.Categoria</td>
+                        @if (esAdmin) { <td>@d.Empresa</td> }
+                        <td>@d.Creador</td>
+                        <td>v@(d.UltimaVersion)</td>
+                        <td><span class="badge">@d.Estado</span></td>
+                        <td>
+                            <a asp-action="Detalle" asp-route-id="@d.IdDocumento">Ver</a>
+                            <a asp-action="Descargar" asp-route-idVersion="@d.IdUltimaVersion" style="margin-left:8px;">Descargar</a>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</div>
