@@ -1,0 +1,23 @@
+@model Central.Models.EmpresaFormViewModel
+@{
+    ViewData["Title"] = "Nueva empresa";
+}
+
+<div class="card" style="max-width: 420px;">
+    <h2>Nueva empresa</h2>
+
+    @if (!string.IsNullOrEmpty(Model.Error))
+    {
+        <p class="err">@Model.Error</p>
+    }
+
+    <form method="post" asp-controller="Empresas" asp-action="Create">
+        <div style="margin-bottom: 12px;">
+            <label>Nombre</label>
+            <input asp-for="Nombre" class="input" />
+            <span asp-validation-for="Nombre" class="err"></span>
+        </div>
+        <button type="submit" class="btn">Guardar</button>
+        <a asp-action="Index" style="margin-left:10px;">Cancelar</a>
+    </form>
+</div>

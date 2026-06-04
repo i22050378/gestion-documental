@@ -8,23 +8,19 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllersWithViews();
 
-// Conexion a SQL Server (la cadena viene de appsettings.json)
 builder.Services.AddDbContext<CentralDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("CentralDB")!));
 
-// Autenticacion por cookie: si no hay sesion, manda al login
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
     .AddCookie(options =>
     {
         options.LoginPath = "/Account/Login";
-        options.AccessDeniedPath = "/Account/Login";
+        options.AccessDeniedPath = "/";          // si un rol no autorizado entra, lo manda al inicio
         options.ExpireTimeSpan = TimeSpan.FromHours(8);
     });
 
 var app = builder.Build();
 
-// Al iniciar, ponerle contrasena real (cifrada) a los usuarios semilla
-// que aun tengan el marcador "PENDIENTE_HASH".
 await SeedPasswordsAsync(app);
 
 app.UseRouting();
@@ -37,7 +33,7 @@ app.MapControllerRoute(
 
 app.Run();
 
-// Contrasena por defecto para los 4 usuarios de prueba: Demo123!
+// Contrasena por defecto para los usuarios de prueba: Demo123!
 static async Task SeedPasswordsAsync(WebApplication app)
 {
     using var scope = app.Services.CreateScope();

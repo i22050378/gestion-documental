@@ -6,5 +6,13 @@
     <h2>Bienvenido, @ViewData["Nombre"]</h2>
     <p>Rol: <strong>@ViewData["Rol"]</strong></p>
     <p>Empresa: <strong>@ViewData["Empresa"]</strong></p>
-    <p>Iniciaste sesion correctamente. Desde aqui iremos construyendo el resto del sistema (gestion de usuarios, documentos, aprobaciones, etc.).</p>
+
+    @if (User.IsInRole("Admin"))
+    {
+        <p>Como Admin, usa el menu de arriba para gestionar <strong>Usuarios</strong> y <strong>Empresas</strong>.</p>
+    }
+    else
+    {
+        <p>Iniciaste sesion correctamente. Aqui iremos agregando documentos y el flujo de aprobacion.</p>
+    }
 </div>

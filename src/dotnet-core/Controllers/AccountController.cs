@@ -40,11 +40,9 @@ public class AccountController : Controller
             return View(model);
         }
 
-        // Registrar ultimo acceso
         usuario!.UltimoAcceso = DateTime.UtcNow;
         await _db.SaveChangesAsync();
 
-        // Construir la identidad (claims) y firmar la cookie de sesion
         var claims = new List<Claim>
         {
             new(ClaimTypes.NameIdentifier, usuario.IdUsuario.ToString()),

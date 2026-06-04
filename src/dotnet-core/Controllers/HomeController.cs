@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Central.Controllers;
 
-[Authorize]   // exige sesion iniciada para entrar
+[Authorize]
 public class HomeController : Controller
 {
     public IActionResult Index()

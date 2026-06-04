@@ -10,14 +10,21 @@
         header h1 { margin: 0; font-size: 19px; }
         header .user { font-size: 14px; }
         header .user form { display: inline; margin-left: 10px; }
-        header .user button.link { color: #cfcdf0; background: none; border: none; cursor: pointer; font-size: 14px; text-decoration: underline; padding: 0; }
-        main { max-width: 900px; margin: 24px auto; padding: 0 16px; }
+        header .user button.link { color: #cfcdf0; }
+        nav.menu { background: #3b3866; padding: 8px 24px; }
+        nav.menu a { color: #cfcdf0; margin-right: 18px; text-decoration: none; font-size: 14px; }
+        nav.menu a:hover { text-decoration: underline; }
+        main { max-width: 920px; margin: 24px auto; padding: 0 16px; }
         h2 { font-size: 17px; margin-top: 0; }
         .ok { color: #166534; font-weight: 600; }
         .err { color: #991b1b; font-weight: 600; font-size: 13px; }
         .card { background: #fff; border: 1px solid #e5e5e5; border-radius: 8px; padding: 16px; margin-bottom: 20px; }
+        table { border-collapse: collapse; width: 100%; background: #fff; }
+        th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid #e5e5e5; font-size: 14px; }
+        th { background: #efeef7; }
         .input { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; }
-        .btn { background: #2d2b55; color: #fff; border: none; padding: 9px 18px; border-radius: 6px; cursor: pointer; font-size: 14px; }
+        .btn { background: #2d2b55; color: #fff; border: none; padding: 9px 18px; border-radius: 6px; cursor: pointer; font-size: 14px; display: inline-block; text-decoration: none; }
+        .link { background: none; border: none; color: #2d2b55; cursor: pointer; text-decoration: underline; font-size: 13px; padding: 0; margin-left: 8px; }
         label { font-size: 14px; }
     </style>
 </head>
@@ -34,6 +41,19 @@
             </span>
         }
     </header>
+
+    @if (User.Identity?.IsAuthenticated == true)
+    {
+        <nav class="menu">
+            <a asp-controller="Home" asp-action="Index">Inicio</a>
+            @if (User.IsInRole("Admin"))
+            {
+                <a asp-controller="Usuarios" asp-action="Index">Usuarios</a>
+                <a asp-controller="Empresas" asp-action="Index">Empresas</a>
+            }
+        </nav>
+    }
+
     <main>
         @RenderBody()
     </main>

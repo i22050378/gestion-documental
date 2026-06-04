@@ -1,0 +1,46 @@
+@model Central.Models.UsuarioFormViewModel
+@{
+    ViewData["Title"] = "Nuevo usuario";
+}
+
+<div class="card" style="max-width: 480px;">
+    <h2>Nuevo usuario</h2>
+
+    @if (!string.IsNullOrEmpty(Model.Error))
+    {
+        <p class="err">@Model.Error</p>
+    }
+
+    <form method="post" asp-controller="Usuarios" asp-action="Create">
+        <div style="margin-bottom: 10px;">
+            <label>Nombre completo</label>
+            <input asp-for="NombreCompleto" class="input" />
+            <span asp-validation-for="NombreCompleto" class="err"></span>
+        </div>
+        <div style="margin-bottom: 10px;">
+            <label>Correo</label>
+            <input asp-for="Correo" class="input" />
+            <span asp-validation-for="Correo" class="err"></span>
+        </div>
+        <div style="margin-bottom: 10px;">
+            <label>Contrasena</label>
+            <input asp-for="Contrasena" type="password" class="input" />
+            <span asp-validation-for="Contrasena" class="err"></span>
+        </div>
+        <div style="margin-bottom: 10px;">
+            <label>Rol</label>
+            <select asp-for="IdRol" class="input" asp-items="@(new SelectList(Model.Roles, "IdRol", "Nombre"))">
+                <option value="">-- elige un rol --</option>
+            </select>
+            <span asp-validation-for="IdRol" class="err"></span>
+        </div>
+        <div style="margin-bottom: 14px;">
+            <label>Empresa (dejar vacio si el rol es Admin)</label>
+            <select asp-for="IdEmpresa" class="input" asp-items="@(new SelectList(Model.Empresas, "IdEmpresa", "Nombre"))">
+                <option value="">(ninguna)</option>
+            </select>
+        </div>
+        <button type="submit" class="btn">Crear</button>
+        <a asp-action="Index" style="margin-left:10px;">Cancelar</a>
+    </form>
+</div>

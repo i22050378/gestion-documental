@@ -1,0 +1,30 @@
+@model List<Central.Models.Empresa>
+@{
+    ViewData["Title"] = "Empresas";
+}
+
+<div class="card">
+    <h2>Empresas</h2>
+    <p><a class="btn" asp-controller="Empresas" asp-action="Create">Nueva empresa</a></p>
+    <table>
+        <thead>
+            <tr><th>Id</th><th>Nombre</th><th>Activa</th><th>Creada</th><th>Acciones</th></tr>
+        </thead>
+        <tbody>
+            @foreach (var e in Model)
+            {
+                <tr>
+                    <td>@e.IdEmpresa</td>
+                    <td>@e.Nombre</td>
+                    <td>@(e.Activo ? "Si" : "No")</td>
+                    <td>@e.FechaCreacion.ToString("yyyy-MM-dd")</td>
+                    <td>
+                        <form method="post" asp-action="ToggleActivo" asp-route-id="@e.IdEmpresa" style="display:inline;">
+                            <button type="submit" class="link">@(e.Activo ? "Desactivar" : "Activar")</button>
+                        </form>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
