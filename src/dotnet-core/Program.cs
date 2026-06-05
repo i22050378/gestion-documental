@@ -15,6 +15,12 @@ builder.Services.AddHttpClient<Central.Services.IndexacionClient>(client =>
     client.BaseAddress = new Uri(baseUrl);
     client.Timeout = TimeSpan.FromSeconds(5);
 });
+builder.Services.AddHttpClient<Central.Services.ConsultaClient>(client =>
+{
+    var baseUrl = builder.Configuration["Consulta:BaseUrl"] ?? "http://localhost:8080";
+    client.BaseAddress = new Uri(baseUrl);
+    client.Timeout = TimeSpan.FromSeconds(5);
+});
 
 builder.Services.AddDbContext<CentralDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("CentralDB")!));

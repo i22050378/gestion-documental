@@ -14,11 +14,13 @@ public class DocumentosController : Controller
     private readonly CentralDbContext _db;
     private readonly BitacoraService _bitacora;
     private readonly IndexacionClient _indexacion;
-    public DocumentosController(CentralDbContext db, BitacoraService bitacora, IndexacionClient indexacion)
+    private readonly ConsultaClient _consulta;
+    public DocumentosController(CentralDbContext db, BitacoraService bitacora, IndexacionClient indexacion, ConsultaClient consulta)
     {
         _db = db;
         _bitacora = bitacora;
         _indexacion = indexacion;
+        _consulta = consulta;
     }
 
     private static readonly string[] ExtensionesPermitidas =
@@ -330,6 +332,29 @@ public class DocumentosController : Controller
         await _bitacora.RegistrarAsync(
             indexado ? "INDEXADO" : "INDEXADO_ERROR", "VERSION", version.IdVersion,
             indexado ? "Metadato enviado al modulo de indexacion" : "No se pudo contactar al modulo de indexacion");
+
+        // ----- Integracion con el modulo de Consulta (PHP + PostgreSQL) -----
+        // Publicamos el documento aprobado para que aparezca en el portal y en los reportes.
+        var aprobadoPor = User.Identity?.Name ?? "";
+        var docConsulta = new
+        {
+            idDocumentoCentral = doc.IdDocumento,
+            idVersionCentral = version.IdVersion,
+            idEmpresa = doc.IdEmpresa,
+            nombreEmpresa,
+            titulo = doc.Titulo,
+            categoria = nombreCategoria,
+            numeroVersion = version.NumeroVersion,
+            nombreArchivo = version.NombreArchivo,
+            extension = version.Extension.TrimStart('.'),
+            tamanoBytes = version.TamanoBytes,
+            aprobadoPor,
+            fechaAprobacion = version.FechaRevision ?? DateTime.UtcNow
+        };
+        bool publicado = await _consulta.PublicarAprobadoAsync(docConsulta);
+        await _bitacora.RegistrarAsync(
+            publicado ? "PUBLICADO" : "PUBLICADO_ERROR", "VERSION", version.IdVersion,
+            publicado ? "Documento publicado en el portal de consulta" : "No se pudo contactar al portal de consulta");
 
         return RedirectToAction("Detalle", new { id = version.IdDocumento });
     }

@@ -52,4 +52,58 @@ final class DocumentoAprobado
         $stmt = Database::pdo()->query('SELECT * FROM vista_resumen_cumplimiento');
         return $stmt->fetchAll();
     }
+
+    // Recibe un documento aprobado desde el Central y lo guarda/actualiza.
+    // Las versiones anteriores del mismo documento dejan de ser vigentes;
+    // la version recien aprobada queda como vigente. Todo en una transaccion.
+    public static function registrarAprobado(array $d): void
+    {
+        $pdo = Database::pdo();
+        $pdo->beginTransaction();
+        try {
+            $up = $pdo->prepare(
+                'UPDATE documentos_aprobados SET es_vigente = FALSE WHERE id_documento_central = :doc'
+            );
+            $up->execute([':doc' => (int)$d['idDocumentoCentral']]);
+
+            $sql = 'INSERT INTO documentos_aprobados
+                (id_documento_central, id_version_central, id_empresa, nombre_empresa, titulo, categoria,
+                 numero_version, nombre_archivo, extension, tamano_bytes, aprobado_por, fecha_aprobacion, es_vigente)
+                VALUES
+                (:doc, :ver, :emp, :nemp, :tit, :cat, :num, :narch, :ext, :tam, :aprob, :fap, TRUE)
+                ON CONFLICT (id_version_central) DO UPDATE SET
+                    id_documento_central = EXCLUDED.id_documento_central,
+                    id_empresa           = EXCLUDED.id_empresa,
+                    nombre_empresa       = EXCLUDED.nombre_empresa,
+                    titulo               = EXCLUDED.titulo,
+                    categoria            = EXCLUDED.categoria,
+                    numero_version       = EXCLUDED.numero_version,
+                    nombre_archivo       = EXCLUDED.nombre_archivo,
+                    extension            = EXCLUDED.extension,
+                    tamano_bytes         = EXCLUDED.tamano_bytes,
+                    aprobado_por         = EXCLUDED.aprobado_por,
+                    fecha_aprobacion     = EXCLUDED.fecha_aprobacion,
+                    es_vigente           = TRUE';
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute([
+                ':doc'   => (int)$d['idDocumentoCentral'],
+                ':ver'   => (int)$d['idVersionCentral'],
+                ':emp'   => (int)($d['idEmpresa'] ?? 0),
+                ':nemp'  => (string)($d['nombreEmpresa'] ?? ''),
+                ':tit'   => (string)$d['titulo'],
+                ':cat'   => (string)($d['categoria'] ?? ''),
+                ':num'   => (int)($d['numeroVersion'] ?? 1),
+                ':narch' => (string)($d['nombreArchivo'] ?? ''),
+                ':ext'   => (string)($d['extension'] ?? ''),
+                ':tam'   => (int)($d['tamanoBytes'] ?? 0),
+                ':aprob' => (string)($d['aprobadoPor'] ?? ''),
+                ':fap'   => (string)($d['fechaAprobacion'] ?? date('c')),
+            ]);
+
+            $pdo->commit();
+        } catch (Throwable $e) {
+            $pdo->rollBack();
+            throw $e;
+        }
+    }
 }
