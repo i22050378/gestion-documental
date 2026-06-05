@@ -16,8 +16,10 @@ public class DocumentoDetalleViewModel
     public int IdUltimaVersion { get; set; }
     public string EstadoUltima { get; set; } = "";
 
-    public bool PuedeAprobar { get; set; }     // Director, misma empresa, ultima = Pendiente
-    public bool PuedeSubirNueva { get; set; }  // Supervisor/Director, misma empresa, ultima = Rechazado
+    public bool PuedeAprobar { get; set; }       // Director, misma empresa, ultima = Pendiente
+    public bool PuedeSubirNueva { get; set; }    // Supervisor/Director, misma empresa, ultima = Rechazado
+    public bool PuedeReportarError { get; set; } // misma empresa, ultima = Aprobado
+    public bool PuedePrerrevisar { get; set; }   // Empleado/Supervisor, misma empresa, ultima = Pendiente
 }
 
 public class VersionRow

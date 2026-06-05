@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Central.Data;
 using Central.Models;
+using Central.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -11,7 +12,12 @@ namespace Central.Controllers;
 public class DocumentosController : Controller
 {
     private readonly CentralDbContext _db;
-    public DocumentosController(CentralDbContext db) => _db = db;
+    private readonly BitacoraService _bitacora;
+    public DocumentosController(CentralDbContext db, BitacoraService bitacora)
+    {
+        _db = db;
+        _bitacora = bitacora;
+    }
 
     private static readonly string[] ExtensionesPermitidas =
         { ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".png", ".jpg", ".jpeg", ".txt", ".dwg" };
@@ -157,7 +163,11 @@ public class DocumentosController : Controller
         vm.PuedeAprobar = User.IsInRole("Director") && mismaEmpresa && vm.EstadoUltima == "Pendiente";
         vm.PuedeSubirNueva = (User.IsInRole("Supervisor") || User.IsInRole("Director"))
                              && mismaEmpresa && vm.EstadoUltima == "Rechazado";
+        vm.PuedeReportarError = mismaEmpresa && vm.EstadoUltima == "Aprobado";
+        vm.PuedePrerrevisar = (User.IsInRole("Empleado") || User.IsInRole("Supervisor"))
+                              && mismaEmpresa && vm.EstadoUltima == "Pendiente";
 
+        await _bitacora.RegistrarAsync("ABRIR", "DOCUMENTO", vm.IdDocumento, vm.Titulo);
         return View(vm);
     }
 
@@ -231,6 +241,8 @@ public class DocumentosController : Controller
 
         _db.Documentos.Add(documento);
         await _db.SaveChangesAsync();
+
+        await _bitacora.RegistrarAsync("SUBIR", "DOCUMENTO", documento.IdDocumento, documento.Titulo);
         return RedirectToAction("Index");
     }
 
@@ -281,6 +293,8 @@ public class DocumentosController : Controller
         });
 
         await _db.SaveChangesAsync();
+
+        await _bitacora.RegistrarAsync("APROBAR", "VERSION", version.IdVersion, doc.Titulo);
         return RedirectToAction("Detalle", new { id = version.IdDocumento });
     }
 
@@ -329,6 +343,8 @@ public class DocumentosController : Controller
         });
 
         await _db.SaveChangesAsync();
+
+        await _bitacora.RegistrarAsync("RECHAZAR", "VERSION", version.IdVersion, doc.Titulo);
         return RedirectToAction("Detalle", new { id = version.IdDocumento });
     }
 
@@ -388,7 +404,101 @@ public class DocumentosController : Controller
         });
 
         await _db.SaveChangesAsync();
+
+        await _bitacora.RegistrarAsync("NUEVA_VERSION", "DOCUMENTO", idDocumento, doc.Titulo);
         return RedirectToAction("Detalle", new { id = idDocumento });
+    }
+
+    // ---------- Reportar error en un documento aprobado (lo reabre) ----------
+    [HttpPost]
+    [Authorize]
+    public async Task<IActionResult> ReportarError(int idVersion, string? comentario)
+    {
+        var info = await _db.Versiones
+            .Where(v => v.IdVersion == idVersion)
+            .Select(v => new { v.IdDocumento, v.IdEstado, v.IdUsuarioSubio, v.NumeroVersion })
+            .FirstOrDefaultAsync();
+        if (info == null) return NotFound();
+
+        var doc = await _db.Documentos.FirstOrDefaultAsync(d => d.IdDocumento == info.IdDocumento);
+        if (doc == null) return NotFound();
+        if (doc.IdEmpresa != EmpresaActual()) return Forbid();
+
+        var idAprobado = await EstadoIdAsync("Aprobado");
+        if (info.IdEstado != idAprobado)
+            return RedirectToAction("Detalle", new { id = info.IdDocumento });
+
+        if (string.IsNullOrWhiteSpace(comentario))
+        {
+            TempData["Error"] = "Describe el error que encontraste.";
+            return RedirectToAction("Detalle", new { id = info.IdDocumento });
+        }
+
+        // Reabrir: la version vigente vuelve a Rechazado
+        var idRechazado = await EstadoIdAsync("Rechazado");
+        await _db.Versiones
+            .Where(v => v.IdVersion == idVersion)
+            .ExecuteUpdateAsync(s => s.SetProperty(v => v.IdEstado, idRechazado));
+
+        _db.Revisiones.Add(new Revision
+        {
+            IdVersion = idVersion,
+            IdUsuario = UsuarioActual(),
+            Tipo = "REPORTE_ERROR",
+            Comentario = comentario.Trim(),
+            FechaHora = DateTime.UtcNow
+        });
+        _db.Notificaciones.Add(new Notificacion
+        {
+            IdUsuario = info.IdUsuarioSubio,
+            Mensaje = $"Se reporto un error en tu documento aprobado \"{doc.Titulo}\" (v{info.NumeroVersion}). Sube una version corregida.",
+            IdVersion = idVersion,
+            Leida = false,
+            FechaCreacion = DateTime.UtcNow
+        });
+
+        await _db.SaveChangesAsync();
+
+        await _bitacora.RegistrarAsync("REPORTE_ERROR", "VERSION", idVersion, doc.Titulo);
+        return RedirectToAction("Detalle", new { id = info.IdDocumento });
+    }
+
+    // ---------- Prerrevision: comentario de roles inferiores mientras esta Pendiente ----------
+    [HttpPost]
+    [Authorize(Roles = "Empleado,Supervisor")]
+    public async Task<IActionResult> Prerrevisar(int idVersion, string? comentario)
+    {
+        var info = await _db.Versiones
+            .Where(v => v.IdVersion == idVersion)
+            .Select(v => new { v.IdDocumento, v.IdEstado })
+            .FirstOrDefaultAsync();
+        if (info == null) return NotFound();
+
+        var doc = await _db.Documentos.FirstOrDefaultAsync(d => d.IdDocumento == info.IdDocumento);
+        if (doc == null) return NotFound();
+        if (doc.IdEmpresa != EmpresaActual()) return Forbid();
+
+        var idPendiente = await EstadoIdAsync("Pendiente");
+        if (info.IdEstado != idPendiente)
+            return RedirectToAction("Detalle", new { id = info.IdDocumento });
+
+        if (string.IsNullOrWhiteSpace(comentario))
+        {
+            TempData["Error"] = "Escribe tu comentario de prerrevision.";
+            return RedirectToAction("Detalle", new { id = info.IdDocumento });
+        }
+
+        _db.Revisiones.Add(new Revision
+        {
+            IdVersion = idVersion,
+            IdUsuario = UsuarioActual(),
+            Tipo = "PREREVISION",
+            Comentario = comentario.Trim(),
+            FechaHora = DateTime.UtcNow
+        });
+
+        await _db.SaveChangesAsync();
+        return RedirectToAction("Detalle", new { id = info.IdDocumento });
     }
 
     // ---------- Descargar archivo de una version ----------
@@ -403,6 +513,7 @@ public class DocumentosController : Controller
         if (!EsAdmin && v.Documento.IdEmpresa != EmpresaActual())
             return Forbid();
 
+        await _bitacora.RegistrarAsync("DESCARGAR", "VERSION", v.IdVersion, v.NombreArchivo);
         return File(v.Archivo, "application/octet-stream", v.NombreArchivo);
     }
 }

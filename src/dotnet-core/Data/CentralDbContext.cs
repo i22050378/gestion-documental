@@ -16,4 +16,5 @@ public class CentralDbContext : DbContext
     public DbSet<DocumentoVersion> Versiones => Set<DocumentoVersion>();
     public DbSet<Revision> Revisiones => Set<Revision>();
     public DbSet<Notificacion> Notificaciones => Set<Notificacion>();
+    public DbSet<Bitacora> Bitacora => Set<Bitacora>();
 }

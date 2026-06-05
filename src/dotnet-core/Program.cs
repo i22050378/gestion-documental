@@ -7,6 +7,8 @@ using Microsoft.EntityFrameworkCore;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllersWithViews();
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<Central.Services.BitacoraService>();
 
 builder.Services.AddDbContext<CentralDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("CentralDB")!));

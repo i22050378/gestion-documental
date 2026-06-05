@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Central.Data;
 using Central.Models;
+using Central.Services;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Identity;
@@ -12,7 +13,12 @@ namespace Central.Controllers;
 public class AccountController : Controller
 {
     private readonly CentralDbContext _db;
-    public AccountController(CentralDbContext db) => _db = db;
+    private readonly BitacoraService _bitacora;
+    public AccountController(CentralDbContext db, BitacoraService bitacora)
+    {
+        _db = db;
+        _bitacora = bitacora;
+    }
 
     [HttpGet]
     public IActionResult Login() => View(new LoginViewModel());
@@ -35,6 +41,7 @@ public class AccountController : Controller
 
         if (!ok)
         {
+            await _bitacora.RegistrarAsync("LOGIN_FALLIDO", "USUARIO", null, $"Correo: {model.Correo}");
             model.Contrasena = "";
             model.Error = "Correo o contrasena incorrectos.";
             return View(model);
@@ -58,12 +65,17 @@ public class AccountController : Controller
             CookieAuthenticationDefaults.AuthenticationScheme,
             new ClaimsPrincipal(identity));
 
+        await _bitacora.RegistrarAsync("LOGIN", "USUARIO", usuario.IdUsuario, null, usuario.IdUsuario);
+
         return RedirectToAction("Index", "Home");
     }
 
     [HttpPost]
     public async Task<IActionResult> Logout()
     {
+        var claim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        int? yo = int.TryParse(claim, out var id) ? id : (int?)null;
+        await _bitacora.RegistrarAsync("LOGOUT", "USUARIO", yo, null, yo);
         await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
         return RedirectToAction("Login");
     }

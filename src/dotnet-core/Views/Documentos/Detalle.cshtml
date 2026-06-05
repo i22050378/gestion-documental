@@ -60,6 +60,38 @@
     </div>
 }
 
+@if (Model.PuedeReportarError)
+{
+    <div class="card">
+        <h2>Reportar error</h2>
+        <p>Este documento esta <strong>aprobado y vigente</strong>. Si encuentras un error, reportalo: el documento se reabrira para que el autor suba una version corregida.</p>
+        <form method="post" asp-action="ReportarError">
+            <input type="hidden" name="idVersion" value="@Model.IdUltimaVersion" />
+            <label>Descripcion del error</label>
+            <textarea name="comentario" class="input" rows="3" placeholder="Explica que esta mal en el documento"></textarea>
+            <div style="margin-top:8px;">
+                <button type="submit" class="btn" style="background:#b45309;">Reportar error</button>
+            </div>
+        </form>
+    </div>
+}
+
+@if (Model.PuedePrerrevisar)
+{
+    <div class="card">
+        <h2>Prerrevision</h2>
+        <p>La version esta <strong>Pendiente</strong>. Puedes dejar un comentario de revision previa para ayudar al Director (no aprueba ni rechaza).</p>
+        <form method="post" asp-action="Prerrevisar">
+            <input type="hidden" name="idVersion" value="@Model.IdUltimaVersion" />
+            <label>Comentario</label>
+            <textarea name="comentario" class="input" rows="3" placeholder="Tus observaciones"></textarea>
+            <div style="margin-top:8px;">
+                <button type="submit" class="btn">Enviar comentario</button>
+            </div>
+        </form>
+    </div>
+}
+
 <div class="card">
     <h2>Versiones</h2>
     <table>
