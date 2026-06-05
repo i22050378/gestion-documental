@@ -13,10 +13,12 @@ public class DocumentosController : Controller
 {
     private readonly CentralDbContext _db;
     private readonly BitacoraService _bitacora;
-    public DocumentosController(CentralDbContext db, BitacoraService bitacora)
+    private readonly IndexacionClient _indexacion;
+    public DocumentosController(CentralDbContext db, BitacoraService bitacora, IndexacionClient indexacion)
     {
         _db = db;
         _bitacora = bitacora;
+        _indexacion = indexacion;
     }
 
     private static readonly string[] ExtensionesPermitidas =
@@ -295,6 +297,40 @@ public class DocumentosController : Controller
         await _db.SaveChangesAsync();
 
         await _bitacora.RegistrarAsync("APROBAR", "VERSION", version.IdVersion, doc.Titulo);
+
+        // ----- Integracion con el modulo de Indexacion (Node + MongoDB) -----
+        // Al aprobar, enviamos el metadato del documento para que quede indexado
+        // y aparezca en la busqueda. Si Node esta caido, no se rompe la aprobacion.
+        var nombreEmpresa = await _db.Empresas
+            .Where(e => e.IdEmpresa == doc.IdEmpresa).Select(e => e.Nombre).FirstOrDefaultAsync() ?? "";
+        var nombreCategoria = await _db.Categorias
+            .Where(c => c.IdCategoria == doc.IdCategoria).Select(c => c.Nombre).FirstOrDefaultAsync() ?? "";
+        var subioPor = await _db.Usuarios
+            .Where(u => u.IdUsuario == version.IdUsuarioSubio).Select(u => u.NombreCompleto).FirstOrDefaultAsync() ?? "";
+
+        var metadato = new
+        {
+            idDocumentoCentral = doc.IdDocumento,
+            idVersionCentral = version.IdVersion,
+            idEmpresa = doc.IdEmpresa,
+            nombreEmpresa,
+            titulo = doc.Titulo,
+            categoria = nombreCategoria,
+            numeroVersion = version.NumeroVersion,
+            estado = "Aprobado",
+            etiquetas = new[] { nombreCategoria.ToLowerInvariant() },
+            nombreArchivo = version.NombreArchivo,
+            extension = version.Extension.TrimStart('.'),
+            subidoPor = subioPor,
+            fechaSubida = version.FechaSubida,
+            fechaAprobacion = version.FechaRevision ?? DateTime.UtcNow
+        };
+
+        bool indexado = await _indexacion.IndexarAsync(metadato);
+        await _bitacora.RegistrarAsync(
+            indexado ? "INDEXADO" : "INDEXADO_ERROR", "VERSION", version.IdVersion,
+            indexado ? "Metadato enviado al modulo de indexacion" : "No se pudo contactar al modulo de indexacion");
+
         return RedirectToAction("Detalle", new { id = version.IdDocumento });
     }
 

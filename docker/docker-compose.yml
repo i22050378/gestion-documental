@@ -2,26 +2,18 @@ name: gestion-documental
 
 # ============================================================
 #  UN SOLO docker-compose.yml orquesta TODO el sistema,
-#  pero los contenedores estan agrupados POR MODULO.
-#
-#  Cada modulo = su aplicacion + su base de datos, en su
-#  PROPIA red privada (la base queda aislada ahi, para que
-#  ningun otro modulo la toque directamente). Una red comun
-#  ("backbone_net") conecta SOLO las APIs de los modulos.
-#
-#  Estado actual: solo las bases de datos. Las apps llegan en
-#  sus fases; abajo quedan comentadas para ver a que red se
-#  conectaran cuando existan.
+#  con los contenedores agrupados POR MODULO (redes privadas).
+#  Una red comun ("backbone_net") conecta las APIs de los modulos.
 #
 #  Ejecuta SIEMPRE desde esta carpeta (docker):
-#      docker compose up -d
+#      docker compose up -d            (levanta lo que ya exista)
+#      docker compose up -d --build    (reconstruye imagenes propias, ej. PHP)
 # ============================================================
 
 services:
 
   # ============================================================
   #  GRUPO 1 - MODULO CENTRAL   (.NET 10 MVC + SQL Server)
-  #  Login, usuarios, roles, flujo de aprobacion, versiones, bitacora
   # ============================================================
   sqlserver:
     image: mcr.microsoft.com/mssql/server:2022-latest
@@ -35,21 +27,13 @@ services:
     volumes:
       - mssql_data:/var/opt/mssql
     networks:
-      - central_net            # aislada dentro del modulo Central
+      - central_net
     restart: unless-stopped
 
-  # (Fase 3) La app .NET se sumara a este mismo grupo:
-  #   app-dotnet:
-  #     build: ../src/dotnet-core
-  #     networks:
-  #       - central_net        # para hablar con sqlserver
-  #       - backbone_net       # para llamar a las APIs de los otros modulos
-  #     depends_on:
-  #       - sqlserver
+  # (Fase 8) La app .NET se contenedorizara aqui (por ahora corre en el host).
 
   # ============================================================
   #  GRUPO 2 - MODULO DE CONSULTA   (PHP 8 MVC + PostgreSQL)
-  #  Consulta de documentos vigentes, descargas, reportes
   # ============================================================
   postgres:
     image: postgres:16
@@ -64,7 +48,7 @@ services:
       - pg_data:/var/lib/postgresql/data
       - ../db/postgres:/docker-entrypoint-initdb.d:ro
     networks:
-      - consulta_net           # aislada dentro del modulo Consulta
+      - consulta_net
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
@@ -73,18 +57,29 @@ services:
       retries: 10
       start_period: 10s
 
-  # (Fase 7) La app PHP se sumara a este mismo grupo:
-  #   app-php:
-  #     build: ../src/php-app
-  #     networks:
-  #       - consulta_net       # para hablar con postgres
-  #       - backbone_net       # para consumir las APIs de los otros modulos
-  #     depends_on:
-  #       - postgres
+  # La app PHP (Modulo de Consulta). Se construye desde su Dockerfile.
+  app-php:
+    build: ../src/php-app
+    container_name: gd_php
+    environment:
+      DB_HOST: postgres            # nombre del servicio en la red consulta_net
+      DB_PORT: 5432
+      DB_NAME: ${POSTGRES_DB}
+      DB_USER: ${POSTGRES_USER}
+      DB_PASS: ${POSTGRES_PASSWORD}
+    ports:
+      - "8080:8080"
+    volumes:
+      - ../src/php-app:/app        # montaje en vivo: editas y se refleja sin reconstruir
+    networks:
+      - consulta_net               # para hablar con postgres
+      - backbone_net               # para comunicarse con los otros modulos por API
+    depends_on:
+      - postgres
+    restart: unless-stopped
 
   # ============================================================
   #  GRUPO 3 - MODULO DE INDEXACION   (Node.js + TypeScript + MongoDB)
-  #  Busqueda rapida, metadatos, etiquetas
   # ============================================================
   mongo:
     image: mongo:7
@@ -99,7 +94,7 @@ services:
       - mongo_data:/data/db
       - ../db/mongo:/docker-entrypoint-initdb.d:ro
     networks:
-      - indexacion_net         # aislada dentro del modulo Indexacion
+      - indexacion_net
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "mongosh --quiet -u $${MONGO_INITDB_ROOT_USERNAME} -p $${MONGO_INITDB_ROOT_PASSWORD} --authenticationDatabase admin --eval 'db.adminCommand({ ping: 1 })' || exit 1"]
@@ -108,14 +103,7 @@ services:
       retries: 10
       start_period: 15s
 
-  # (Fase 6) La app Node se sumara a este mismo grupo:
-  #   app-node:
-  #     build: ../src/node-service
-  #     networks:
-  #       - indexacion_net     # para hablar con mongo
-  #       - backbone_net       # para exponer su API a los otros modulos
-  #     depends_on:
-  #       - mongo
+  # (Fase 8) La app Node se contenedorizara aqui (por ahora corre en el host).
 
 
 # ---------- Volumenes con nombre (datos persistentes) ----------
@@ -125,10 +113,6 @@ volumes:
   mongo_data:
 
 # ---------- Redes ----------
-#  Una red PRIVADA por modulo: ahi viven, aislados, la app y la base
-#  de ese modulo (asi ninguna base toca directamente a otra).
-#  Una red COMUN ("backbone_net"): el pasillo donde, mas adelante,
-#  las apps se hablaran entre si por API.
 networks:
   central_net:
     driver: bridge

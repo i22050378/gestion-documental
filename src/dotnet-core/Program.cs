@@ -9,6 +9,12 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllersWithViews();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<Central.Services.BitacoraService>();
+builder.Services.AddHttpClient<Central.Services.IndexacionClient>(client =>
+{
+    var baseUrl = builder.Configuration["Indexacion:BaseUrl"] ?? "http://localhost:4000";
+    client.BaseAddress = new Uri(baseUrl);
+    client.Timeout = TimeSpan.FromSeconds(5);
+});
 
 builder.Services.AddDbContext<CentralDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("CentralDB")!));
