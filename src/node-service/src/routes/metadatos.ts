@@ -47,3 +47,54 @@ metadatosRouter.get("/documentos/:id/versiones", async (req: Request, res: Respo
     res.status(500).json({ error: "Error consultando versiones", detalle: String(err) });
   }
 });
+
+// POST /api/metadatos
+//   Crea o actualiza (upsert) el metadato de una version. Este es el endpoint
+//   que el modulo Central llamara al aprobar un documento. La clave para no
+//   duplicar es (idDocumentoCentral + numeroVersion), que tiene indice unico.
+metadatosRouter.post("/metadatos", async (req: Request, res: Response) => {
+  try {
+    const b = req.body ?? {};
+
+    // Validacion minima de los campos imprescindibles.
+    const requeridos = ["idDocumentoCentral", "idVersionCentral", "numeroVersion", "titulo"];
+    const faltantes = requeridos.filter((k) => b[k] === undefined || b[k] === null || b[k] === "");
+    if (faltantes.length > 0) {
+      return res.status(400).json({ error: "Faltan campos requeridos", campos: faltantes });
+    }
+
+    const doc = {
+      idDocumentoCentral: Number(b.idDocumentoCentral),
+      idVersionCentral: Number(b.idVersionCentral),
+      idEmpresa: Number(b.idEmpresa ?? 0),
+      nombreEmpresa: String(b.nombreEmpresa ?? ""),
+      titulo: String(b.titulo),
+      categoria: String(b.categoria ?? ""),
+      numeroVersion: Number(b.numeroVersion),
+      estado: String(b.estado ?? "Aprobado"),
+      etiquetas: Array.isArray(b.etiquetas) ? b.etiquetas.map(String) : [],
+      nombreArchivo: String(b.nombreArchivo ?? ""),
+      extension: String(b.extension ?? ""),
+      subidoPor: String(b.subidoPor ?? ""),
+      fechaSubida: b.fechaSubida ? new Date(b.fechaSubida) : new Date(),
+      fechaAprobacion: b.fechaAprobacion ? new Date(b.fechaAprobacion) : new Date(),
+      fechaIndexado: new Date(),
+    };
+
+    const col = getDb().collection(COLECCION);
+    const resultado = await col.updateOne(
+      { idDocumentoCentral: doc.idDocumentoCentral, numeroVersion: doc.numeroVersion },
+      { $set: doc },
+      { upsert: true }
+    );
+
+    res.status(200).json({
+      ok: true,
+      operacion: resultado.upsertedCount > 0 ? "insertado" : "actualizado",
+      idDocumentoCentral: doc.idDocumentoCentral,
+      numeroVersion: doc.numeroVersion,
+    });
+  } catch (err) {
+    res.status(500).json({ error: "Error guardando metadato", detalle: String(err) });
+  }
+});
