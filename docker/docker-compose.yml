@@ -67,6 +67,8 @@ services:
       DB_NAME: ${POSTGRES_DB}
       DB_USER: ${POSTGRES_USER}
       DB_PASS: ${POSTGRES_PASSWORD}
+      CENTRAL_URL: http://host.docker.internal:5080   # asi el contenedor alcanza al .NET del host
+      API_KEY: clave-interna-2026                      # debe coincidir con appsettings del .NET
     ports:
       - "8080:8080"
     volumes:
@@ -74,6 +76,8 @@ services:
     networks:
       - consulta_net               # para hablar con postgres
       - backbone_net               # para comunicarse con los otros modulos por API
+    extra_hosts:
+      - "host.docker.internal:host-gateway"   # permite resolver al host desde el contenedor
     depends_on:
       - postgres
     restart: unless-stopped

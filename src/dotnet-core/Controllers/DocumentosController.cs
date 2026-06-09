@@ -64,6 +64,10 @@ public class DocumentosController : Controller
                 FechaCreacion = d.FechaCreacion,
                 UltimaVersion = d.Versiones.OrderByDescending(v => v.NumeroVersion)
                                            .Select(v => v.NumeroVersion).FirstOrDefault(),
+                UltimaVersionMajor = d.Versiones.OrderByDescending(v => v.NumeroVersion)
+                                                .Select(v => v.VersionMajor).FirstOrDefault(),
+                UltimaVersionMinor = d.Versiones.OrderByDescending(v => v.NumeroVersion)
+                                                .Select(v => v.VersionMinor).FirstOrDefault(),
                 IdEstadoUltima = d.Versiones.OrderByDescending(v => v.NumeroVersion)
                                             .Select(v => v.IdEstado).FirstOrDefault(),
                 IdUltimaVersion = d.Versiones.OrderByDescending(v => v.NumeroVersion)
@@ -108,7 +112,7 @@ public class DocumentosController : Controller
         var versionesRaw = await _db.Versiones
             .Where(v => v.IdDocumento == id)
             .OrderByDescending(v => v.NumeroVersion)
-            .Select(v => new { v.IdVersion, v.NumeroVersion, v.IdEstado, v.IdUsuarioSubio, v.FechaSubida, v.TamanoBytes })
+            .Select(v => new { v.IdVersion, v.NumeroVersion, v.VersionMajor, v.VersionMinor, v.IdEstado, v.IdUsuarioSubio, v.FechaSubida, v.TamanoBytes, v.Extension })
             .ToListAsync();
 
         var versionIds = versionesRaw.Select(v => v.IdVersion).ToList();
@@ -137,7 +141,10 @@ public class DocumentosController : Controller
             {
                 IdVersion = v.IdVersion,
                 NumeroVersion = v.NumeroVersion,
+                VersionMajor = v.VersionMajor,
+                VersionMinor = v.VersionMinor,
                 Estado = nombreEstado,
+                Extension = v.Extension,
                 SubioPor = usuarios.GetValueOrDefault(v.IdUsuarioSubio, ""),
                 FechaSubida = v.FechaSubida,
                 TamanoBytes = v.TamanoBytes,
@@ -233,6 +240,8 @@ public class DocumentosController : Controller
         documento.Versiones.Add(new DocumentoVersion
         {
             NumeroVersion = 1,
+            VersionMajor = 1,
+            VersionMinor = 0,
             IdEstado = idPendiente,
             IdUsuarioSubio = usuario,
             NombreArchivo = Path.GetFileName(vm.Archivo.FileName),
@@ -274,6 +283,14 @@ public class DocumentosController : Controller
             .Where(v => v.IdDocumento == doc.IdDocumento && v.IdEstado == idAprobado && v.IdVersion != version.IdVersion)
             .ExecuteUpdateAsync(s => s.SetProperty(v => v.IdEstado, idObsoleto));
 
+        // Numeracion: si hubo correcciones (decimal > 0) sube a la siguiente entera
+        // (ej. 1.2 -> 2.0). Si se aprueba tal cual, sin rechazos, se queda (ej. 1.0).
+        if (version.VersionMinor > 0)
+        {
+            version.VersionMajor += 1;
+            version.VersionMinor = 0;
+        }
+
         version.IdEstado = idAprobado;
         version.IdUsuarioRevisor = UsuarioActual();
         version.FechaRevision = DateTime.UtcNow;
@@ -290,7 +307,7 @@ public class DocumentosController : Controller
         _db.Notificaciones.Add(new Notificacion
         {
             IdUsuario = version.IdUsuarioSubio,
-            Mensaje = $"Tu documento \"{doc.Titulo}\" (v{version.NumeroVersion}) fue APROBADO.",
+            Mensaje = $"Tu documento \"{doc.Titulo}\" (v{version.VersionMajor}.{version.VersionMinor}) fue APROBADO.",
             IdVersion = version.IdVersion,
             Leida = false,
             FechaCreacion = DateTime.UtcNow
@@ -318,7 +335,7 @@ public class DocumentosController : Controller
             nombreEmpresa,
             titulo = doc.Titulo,
             categoria = nombreCategoria,
-            numeroVersion = version.NumeroVersion,
+            numeroVersion = version.VersionMajor,
             estado = "Aprobado",
             etiquetas = new[] { nombreCategoria.ToLowerInvariant() },
             nombreArchivo = version.NombreArchivo,
@@ -344,7 +361,7 @@ public class DocumentosController : Controller
             nombreEmpresa,
             titulo = doc.Titulo,
             categoria = nombreCategoria,
-            numeroVersion = version.NumeroVersion,
+            numeroVersion = version.VersionMajor,
             nombreArchivo = version.NombreArchivo,
             extension = version.Extension.TrimStart('.'),
             tamanoBytes = version.TamanoBytes,
@@ -397,7 +414,7 @@ public class DocumentosController : Controller
         _db.Notificaciones.Add(new Notificacion
         {
             IdUsuario = version.IdUsuarioSubio,
-            Mensaje = $"Tu documento \"{doc.Titulo}\" (v{version.NumeroVersion}) fue RECHAZADO: {comentario.Trim()}",
+            Mensaje = $"Tu documento \"{doc.Titulo}\" (v{version.VersionMajor}.{version.VersionMinor}) fue RECHAZADO: {comentario.Trim()}",
             IdVersion = version.IdVersion,
             Leida = false,
             FechaCreacion = DateTime.UtcNow
@@ -421,7 +438,7 @@ public class DocumentosController : Controller
         var ultima = await _db.Versiones
             .Where(v => v.IdDocumento == idDocumento)
             .OrderByDescending(v => v.NumeroVersion)
-            .Select(v => new { v.NumeroVersion, v.IdEstado })
+            .Select(v => new { v.NumeroVersion, v.IdEstado, v.VersionMajor, v.VersionMinor })
             .FirstOrDefaultAsync();
 
         var idRechazado = await EstadoIdAsync("Rechazado");
@@ -454,6 +471,8 @@ public class DocumentosController : Controller
         {
             IdDocumento = idDocumento,
             NumeroVersion = ultima.NumeroVersion + 1,
+            VersionMajor = ultima.VersionMajor,
+            VersionMinor = ultima.VersionMinor + 1,
             IdEstado = idPendiente,
             IdUsuarioSubio = UsuarioActual(),
             NombreArchivo = Path.GetFileName(archivo.FileName),
@@ -577,4 +596,40 @@ public class DocumentosController : Controller
         await _bitacora.RegistrarAsync("DESCARGAR", "VERSION", v.IdVersion, v.NombreArchivo);
         return File(v.Archivo, "application/octet-stream", v.NombreArchivo);
     }
+
+    // ---------- Ver archivo en el navegador (inline, sin descargar) ----------
+    public async Task<IActionResult> Ver(int idVersion)
+    {
+        var v = await _db.Versiones
+            .Include(x => x.Documento)
+            .FirstOrDefaultAsync(x => x.IdVersion == idVersion);
+
+        if (v == null || v.Documento == null) return NotFound();
+
+        if (!EsAdmin && v.Documento.IdEmpresa != EmpresaActual())
+            return Forbid();
+
+        await _bitacora.RegistrarAsync("VER", "VERSION", v.IdVersion, v.NombreArchivo);
+        // File(bytes, contentType) SIN nombre => el navegador lo muestra inline
+        return File(v.Archivo, ContentTypePorExtension(v.Extension));
+    }
+
+    // Tipo MIME segun la extension (para que el navegador sepa como mostrarlo).
+    public static string ContentTypePorExtension(string extension)
+    {
+        return extension.ToLowerInvariant().TrimStart('.') switch
+        {
+            "pdf" => "application/pdf",
+            "png" => "image/png",
+            "jpg" or "jpeg" => "image/jpeg",
+            "gif" => "image/gif",
+            "txt" => "text/plain; charset=utf-8",
+            _ => "application/octet-stream",
+        };
+    }
+
+    // Indica si el navegador puede mostrar ese tipo directamente (PDF, imagen, texto).
+    public static bool SePuedeVer(string extension) =>
+        new[] { "pdf", "png", "jpg", "jpeg", "gif", "txt" }
+            .Contains(extension.ToLowerInvariant().TrimStart('.'));
 }

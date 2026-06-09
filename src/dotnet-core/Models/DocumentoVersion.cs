@@ -8,7 +8,9 @@ public class DocumentoVersion
 {
     [Key] public int IdVersion { get; set; }
     public int IdDocumento { get; set; }
-    public int NumeroVersion { get; set; }
+    public int NumeroVersion { get; set; }     // contador secuencial interno (1,2,3...)
+    public int VersionMajor { get; set; }      // parte entera para mostrar (1.x, 2.x)
+    public int VersionMinor { get; set; }      // parte decimal (sube en cada correccion)
     public int IdEstado { get; set; }
     public int IdUsuarioSubio { get; set; }
     public string NombreArchivo { get; set; } = "";

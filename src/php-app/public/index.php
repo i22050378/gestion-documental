@@ -8,14 +8,21 @@ require_once __DIR__ . '/../app/Models/DocumentoAprobado.php';
 require_once __DIR__ . '/../app/Controllers/DocumentosController.php';
 require_once __DIR__ . '/../app/Controllers/ReportesController.php';
 require_once __DIR__ . '/../app/Controllers/ApiController.php';
+require_once __DIR__ . '/../app/Controllers/ArchivoController.php';
 
 // Enrutado simple por query string:
-//   ?r=documentos | ?r=reportes | ?r=api/aprobados (POST, lo llama el Central)
+//   ?r=documentos | ?r=reportes | ?r=ver&id=N | ?r=descargar&id=N | ?r=api/aprobados (POST)
 $ruta = $_GET['r'] ?? 'documentos';
 
 switch ($ruta) {
     case 'reportes':
         (new ReportesController())->index();
+        break;
+    case 'ver':
+        (new ArchivoController())->ver();
+        break;
+    case 'descargar':
+        (new ArchivoController())->descargar();
         break;
     case 'api/aprobados':
         (new ApiController())->aprobados();

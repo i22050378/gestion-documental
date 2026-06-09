@@ -10,6 +10,8 @@ public class DocumentoListItem
     public string Empresa { get; set; } = "";
     public DateTime FechaCreacion { get; set; }
     public int UltimaVersion { get; set; }
+    public int UltimaVersionMajor { get; set; }
+    public int UltimaVersionMinor { get; set; }
     public int IdEstadoUltima { get; set; }
     public string? Estado { get; set; }
     public int IdUltimaVersion { get; set; }

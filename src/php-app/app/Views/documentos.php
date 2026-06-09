@@ -45,10 +45,16 @@
             <td><?= htmlspecialchars($d['titulo']) ?></td>
             <td><?= htmlspecialchars($d['nombre_empresa']) ?></td>
             <td><span class="badge"><?= htmlspecialchars($d['categoria']) ?></span></td>
-            <td>v<?= htmlspecialchars((string)$d['numero_version']) ?></td>
+            <td><?= htmlspecialchars((string)$d['numero_version']) ?>.0</td>
             <td><?= htmlspecialchars($d['aprobado_por']) ?></td>
             <td><?= htmlspecialchars(substr((string)$d['fecha_aprobacion'], 0, 10)) ?></td>
-            <td><?= htmlspecialchars($d['nombre_archivo']) ?></td>
+            <td>
+              <?php $ext = strtolower((string)$d['extension']); ?>
+              <?php if (in_array($ext, ['pdf', 'png', 'jpg', 'jpeg', 'gif', 'txt'], true)): ?>
+                <a href="?r=ver&id=<?= (int)$d['id_version_central'] ?>" target="_blank">Ver</a> &nbsp;
+              <?php endif; ?>
+              <a href="?r=descargar&id=<?= (int)$d['id_version_central'] ?>">Descargar</a>
+            </td>
           </tr>
         <?php endforeach; ?>
       </tbody>

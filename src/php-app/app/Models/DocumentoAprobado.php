@@ -7,7 +7,7 @@ final class DocumentoAprobado
     // Documentos vigentes, con filtros opcionales por titulo, empresa y categoria.
     public static function vigentes(string $q, string $empresa, string $categoria): array
     {
-        $sql = 'SELECT * FROM vista_documentos_vigentes WHERE 1=1';
+        $sql = 'SELECT * FROM documentos_aprobados WHERE es_vigente = TRUE';
         $params = [];
 
         if ($q !== '') {
@@ -51,6 +51,17 @@ final class DocumentoAprobado
     {
         $stmt = Database::pdo()->query('SELECT * FROM vista_resumen_cumplimiento');
         return $stmt->fetchAll();
+    }
+
+    // Una fila por su id de version en el Central (para saber nombre y extension).
+    public static function porVersion(int $idVersion): ?array
+    {
+        $stmt = Database::pdo()->prepare(
+            'SELECT * FROM documentos_aprobados WHERE id_version_central = :v LIMIT 1'
+        );
+        $stmt->execute([':v' => $idVersion]);
+        $row = $stmt->fetch();
+        return $row === false ? null : $row;
     }
 
     // Recibe un documento aprobado desde el Central y lo guarda/actualiza.

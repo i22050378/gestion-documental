@@ -26,7 +26,13 @@ public class VersionRow
 {
     public int IdVersion { get; set; }
     public int NumeroVersion { get; set; }
+    public int VersionMajor { get; set; }
+    public int VersionMinor { get; set; }
     public string Estado { get; set; } = "";
+    public string Extension { get; set; } = "";
+    public bool SePuedeVer =>
+        new[] { "pdf", "png", "jpg", "jpeg", "gif", "txt" }
+            .Contains((Extension ?? "").ToLowerInvariant().TrimStart('.'));
     public string SubioPor { get; set; } = "";
     public DateTime FechaSubida { get; set; }
     public long TamanoBytes { get; set; }

@@ -41,7 +41,7 @@
                         <td>@d.Categoria</td>
                         @if (esAdmin) { <td>@d.Empresa</td> }
                         <td>@d.Creador</td>
-                        <td>v@(d.UltimaVersion)</td>
+                        <td>v@(d.UltimaVersionMajor).@(d.UltimaVersionMinor)</td>
                         <td><span class="badge">@d.Estado</span></td>
                         <td>
                             <a asp-action="Detalle" asp-route-id="@d.IdDocumento">Ver</a>
