@@ -1,4 +1,5 @@
 import express from "express";
+import path from "path";
 import { config } from "./config";
 import { connectDb, pingDb } from "./db";
 import { metadatosRouter } from "./routes/metadatos";
@@ -7,8 +8,11 @@ function main(): void {
   const app = express();
   app.use(express.json());
 
-  // Pagina raiz: dice que es y que endpoints tiene.
-  app.get("/", (_req, res) => {
+  // Sirve el panel web (carpeta public/). Al entrar a "/" muestra index.html.
+  app.use(express.static(path.join(__dirname, "..", "public")));
+
+  // Info del servicio en formato JSON (por si se necesita).
+  app.get("/info", (_req, res) => {
     res.json({
       servicio: "Modulo de Indexacion y Metadatos",
       endpoints: ["/health", "/api/metadatos", "/api/documentos/:id/versiones"],

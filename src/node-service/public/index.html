@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Panel de Indexacion y Busqueda</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, sans-serif; margin: 0; background: #f4f6fb; color: #1c1c28; }
+    header { background: #312e81; color: #fff; padding: 16px 24px; }
+    header h1 { margin: 0; font-size: 19px; }
+    header p { margin: 4px 0 0; font-size: 13px; color: #c7c9f0; }
+    main { max-width: 1000px; margin: 24px auto; padding: 0 16px; }
+    .card { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 16px; margin-bottom: 18px; }
+    .buscador { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .buscador input { padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px; }
+    #q { flex: 1; min-width: 220px; }
+    .btn { background: #4f46e5; color: #fff; border: none; padding: 10px 18px; border-radius: 8px; cursor: pointer; font-size: 14px; }
+    .btn:hover { background: #4338ca; }
+    .btn.sec { background: #e0e7ff; color: #3730a3; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid #eef0f4; font-size: 14px; vertical-align: top; }
+    th { background: #eef2ff; color: #3730a3; }
+    .chip { display: inline-block; background: #eef2ff; color: #4338ca; padding: 2px 8px; border-radius: 10px; font-size: 12px; margin: 1px 2px; }
+    .estado { display: inline-block; padding: 2px 9px; border-radius: 10px; font-size: 12px; font-weight: 600; }
+    .Aprobado { background: #dcfce7; color: #166534; }
+    .Obsoleto { background: #fee2e2; color: #991b1b; }
+    .Pendiente { background: #fef9c3; color: #854d0e; }
+    .Rechazado { background: #fee2e2; color: #991b1b; }
+    .meta { color: #64748b; font-size: 13px; margin: 6px 0 0; }
+    .vacio { color: #64748b; padding: 12px 0; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Panel de Indexacion y Busqueda</h1>
+    <p>Modulo de metadatos · busca documentos por titulo, etiqueta o empresa</p>
+  </header>
+
+  <main>
+    <div class="card">
+      <div class="buscador">
+        <input type="text" id="q" placeholder="Buscar por titulo o etiqueta...">
+        <input type="text" id="empresa" placeholder="Empresa (opcional)">
+        <input type="text" id="etiqueta" placeholder="Etiqueta (opcional)">
+        <button class="btn" id="btnBuscar">Buscar</button>
+        <button class="btn sec" id="btnTodos">Ver todos</button>
+      </div>
+      <p class="meta" id="resumen"></p>
+    </div>
+
+    <div class="card">
+      <table>
+        <thead>
+          <tr>
+            <th>Titulo</th><th>Empresa</th><th>Categoria</th><th>Version</th>
+            <th>Estado</th><th>Etiquetas</th><th>Archivo</th>
+          </tr>
+        </thead>
+        <tbody id="cuerpo">
+          <tr><td colspan="7" class="vacio">Cargando...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+
+    function escapar(t) {
+      return String(t ?? "").replace(/[&<>"]/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[c]));
+    }
+
+    async function buscar() {
+      const q = $("q").value.trim();
+      const empresa = $("empresa").value.trim();
+      const etiqueta = $("etiqueta").value.trim();
+
+      const params = new URLSearchParams();
+      if (q) params.set("q", q);
+      if (empresa) params.set("empresa", empresa);
+      if (etiqueta) params.set("etiqueta", etiqueta);
+
+      $("cuerpo").innerHTML = '<tr><td colspan="7" class="vacio">Buscando...</td></tr>';
+      try {
+        const resp = await fetch("/api/metadatos?" + params.toString());
+        const data = await resp.json();
+        render(data.datos || []);
+        $("resumen").textContent = (data.total || 0) + " documento(s) encontrado(s)";
+      } catch (e) {
+        $("cuerpo").innerHTML = '<tr><td colspan="7" class="vacio">Error al consultar el servicio.</td></tr>';
+        $("resumen").textContent = "";
+      }
+    }
+
+    function render(docs) {
+      if (!docs.length) {
+        $("cuerpo").innerHTML = '<tr><td colspan="7" class="vacio">No se encontraron documentos.</td></tr>';
+        return;
+      }
+      $("cuerpo").innerHTML = docs.map(d => {
+        const tags = (d.etiquetas || []).map(t => '<span class="chip">' + escapar(t) + '</span>').join("");
+        const estado = escapar(d.estado || "");
+        return '<tr>' +
+          '<td>' + escapar(d.titulo) + '</td>' +
+          '<td>' + escapar(d.nombreEmpresa) + '</td>' +
+          '<td>' + escapar(d.categoria) + '</td>' +
+          '<td>v' + escapar(d.numeroVersion) + '.0</td>' +
+          '<td><span class="estado ' + estado + '">' + estado + '</span></td>' +
+          '<td>' + tags + '</td>' +
+          '<td>' + escapar(d.nombreArchivo) + '</td>' +
+        '</tr>';
+      }).join("");
+    }
+
+    $("btnBuscar").addEventListener("click", buscar);
+    $("q").addEventListener("keydown", e => { if (e.key === "Enter") buscar(); });
+    $("etiqueta").addEventListener("keydown", e => { if (e.key === "Enter") buscar(); });
+    $("empresa").addEventListener("keydown", e => { if (e.key === "Enter") buscar(); });
+    $("btnTodos").addEventListener("click", () => {
+      $("q").value = ""; $("empresa").value = ""; $("etiqueta").value = "";
+      buscar();
+    });
+
+    buscar(); // carga inicial
+  </script>
+</body>
+</html>
