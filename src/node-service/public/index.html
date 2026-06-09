@@ -54,11 +54,11 @@
         <thead>
           <tr>
             <th>Titulo</th><th>Empresa</th><th>Categoria</th><th>Version</th>
-            <th>Estado</th><th>Etiquetas</th><th>Archivo</th>
+            <th>Estado</th><th>Etiquetas</th><th>Archivo</th><th>Texto</th>
           </tr>
         </thead>
         <tbody id="cuerpo">
-          <tr><td colspan="7" class="vacio">Cargando...</td></tr>
+          <tr><td colspan="8" class="vacio">Cargando...</td></tr>
         </tbody>
       </table>
     </div>
@@ -81,26 +81,30 @@
       if (empresa) params.set("empresa", empresa);
       if (etiqueta) params.set("etiqueta", etiqueta);
 
-      $("cuerpo").innerHTML = '<tr><td colspan="7" class="vacio">Buscando...</td></tr>';
+      $("cuerpo").innerHTML = '<tr><td colspan="8" class="vacio">Buscando...</td></tr>';
       try {
         const resp = await fetch("/api/metadatos?" + params.toString());
         const data = await resp.json();
         render(data.datos || []);
         $("resumen").textContent = (data.total || 0) + " documento(s) encontrado(s)";
       } catch (e) {
-        $("cuerpo").innerHTML = '<tr><td colspan="7" class="vacio">Error al consultar el servicio.</td></tr>';
+        $("cuerpo").innerHTML = '<tr><td colspan="8" class="vacio">Error al consultar el servicio.</td></tr>';
         $("resumen").textContent = "";
       }
     }
 
     function render(docs) {
       if (!docs.length) {
-        $("cuerpo").innerHTML = '<tr><td colspan="7" class="vacio">No se encontraron documentos.</td></tr>';
+        $("cuerpo").innerHTML = '<tr><td colspan="8" class="vacio">No se encontraron documentos.</td></tr>';
         return;
       }
       $("cuerpo").innerHTML = docs.map(d => {
         const tags = (d.etiquetas || []).map(t => '<span class="chip">' + escapar(t) + '</span>').join("");
         const estado = escapar(d.estado || "");
+        const textoLinks = d.tieneTexto
+          ? '<a href="/api/versiones/' + encodeURIComponent(d.idVersionCentral) + '/texto" target="_blank">Ver texto</a> &nbsp; ' +
+            '<a href="/api/versiones/' + encodeURIComponent(d.idVersionCentral) + '/texto?descargar=1">Descargar .txt</a>'
+          : '<span style="color:#94a3b8;">&mdash;</span>';
         return '<tr>' +
           '<td>' + escapar(d.titulo) + '</td>' +
           '<td>' + escapar(d.nombreEmpresa) + '</td>' +
@@ -109,6 +113,7 @@
           '<td><span class="estado ' + estado + '">' + estado + '</span></td>' +
           '<td>' + tags + '</td>' +
           '<td>' + escapar(d.nombreArchivo) + '</td>' +
+          '<td>' + textoLinks + '</td>' +
         '</tr>';
       }).join("");
     }

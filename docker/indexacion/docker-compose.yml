@@ -1,0 +1,66 @@
+name: indexacion
+
+# ============================================================
+#  MODULO DE INDEXACION  (Node.js + TypeScript + MongoDB)
+#  Independiente: arranca con su propio "docker compose up".
+#  Se comunica con los otros modulos por la red comun "gd_backbone".
+#
+#  Ejecuta desde esta carpeta (docker/indexacion):
+#      docker compose up -d --build
+# ============================================================
+
+services:
+
+  mongo:
+    image: mongo:7
+    container_name: gd_mongo
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: mongoadmin
+      MONGO_INITDB_ROOT_PASSWORD: M0ngo!2026
+      MONGO_INITDB_DATABASE: indexacion_db
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+      - ../../db/mongo:/docker-entrypoint-initdb.d:ro
+    networks:
+      - indexacion_net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --quiet -u $${MONGO_INITDB_ROOT_USERNAME} -p $${MONGO_INITDB_ROOT_PASSWORD} --authenticationDatabase admin --eval 'db.adminCommand({ ping: 1 })' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
+  app-node:
+    build: ../../src/node-service
+    container_name: gd_node
+    environment:
+      PORT: 4000
+      MONGO_URI: mongodb://mongo:27017     # "mongo" = nombre del servicio en indexacion_net
+      MONGO_USER: mongoadmin
+      MONGO_PASS: M0ngo!2026
+      MONGO_AUTH_SOURCE: admin
+      MONGO_DB: indexacion_db
+    ports:
+      - "4000:4000"
+    networks:
+      - indexacion_net               # para hablar con su Mongo
+      - gd_backbone                  # red comun para los otros modulos
+    depends_on:
+      - mongo
+    restart: unless-stopped
+
+# ---------- Volumen: reusa los datos que YA tienes ----------
+volumes:
+  mongo_data:
+    external: true
+    name: gestion-documental_mongo_data
+
+# ---------- Redes ----------
+networks:
+  indexacion_net:
+    driver: bridge
+  gd_backbone:
+    external: true

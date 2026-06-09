@@ -327,6 +327,10 @@ public class DocumentosController : Controller
         var subioPor = await _db.Usuarios
             .Where(u => u.IdUsuario == version.IdUsuarioSubio).Select(u => u.NombreCompleto).FirstOrDefaultAsync() ?? "";
 
+        // Extraemos el texto del archivo (PDF, Word .docx o .txt) para indexarlo
+        // (busqueda por contenido y descarga .txt). Si no se puede, queda vacio.
+        var textoExtraido = ExtraerTexto(version.Archivo, version.Extension);
+
         var metadato = new
         {
             idDocumentoCentral = doc.IdDocumento,
@@ -342,7 +346,8 @@ public class DocumentosController : Controller
             extension = version.Extension.TrimStart('.'),
             subidoPor = subioPor,
             fechaSubida = version.FechaSubida,
-            fechaAprobacion = version.FechaRevision ?? DateTime.UtcNow
+            fechaAprobacion = version.FechaRevision ?? DateTime.UtcNow,
+            textoCompleto = textoExtraido
         };
 
         bool indexado = await _indexacion.IndexarAsync(metadato);
@@ -632,4 +637,57 @@ public class DocumentosController : Controller
     public static bool SePuedeVer(string extension) =>
         new[] { "pdf", "png", "jpg", "jpeg", "gif", "txt" }
             .Contains(extension.ToLowerInvariant().TrimStart('.'));
+
+    // Extrae el texto de un archivo segun su tipo. Si algo falla, devuelve "".
+    private static string ExtraerTexto(byte[] archivo, string extension)
+    {
+        var ext = extension.ToLowerInvariant().TrimStart('.');
+        try
+        {
+            return ext switch
+            {
+                "pdf"  => ExtraerTextoPdf(archivo),
+                "docx" => ExtraerTextoDocx(archivo),
+                "txt"  => System.Text.Encoding.UTF8.GetString(archivo).Trim(),
+                _      => "",
+            };
+        }
+        catch
+        {
+            return "";
+        }
+    }
+
+    // PDF: usa la libreria PdfPig.
+    private static string ExtraerTextoPdf(byte[] archivo)
+    {
+        var sb = new System.Text.StringBuilder();
+        using var doc = UglyToad.PdfPig.PdfDocument.Open(archivo);
+        foreach (var page in doc.GetPages())
+            sb.AppendLine(page.Text);
+        return sb.ToString().Trim();
+    }
+
+    // Word (.docx): un .docx es un ZIP con XML dentro. Leemos word/document.xml
+    // y juntamos el texto de los parrafos (sin librerias extra).
+    private static string ExtraerTextoDocx(byte[] archivo)
+    {
+        using var ms = new System.IO.MemoryStream(archivo);
+        using var zip = new System.IO.Compression.ZipArchive(ms, System.IO.Compression.ZipArchiveMode.Read);
+        var entry = zip.GetEntry("word/document.xml");
+        if (entry == null) return "";
+
+        using var stream = entry.Open();
+        var doc = System.Xml.Linq.XDocument.Load(stream);
+        System.Xml.Linq.XNamespace w = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+
+        var sb = new System.Text.StringBuilder();
+        foreach (var parrafo in doc.Descendants(w + "p"))
+        {
+            foreach (var texto in parrafo.Descendants(w + "t"))
+                sb.Append(texto.Value);
+            sb.AppendLine();
+        }
+        return sb.ToString().Trim();
+    }
 }

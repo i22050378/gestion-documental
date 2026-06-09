@@ -16,4 +16,5 @@ export interface DocumentoMeta {
   subidoPor: string;
   fechaSubida: Date | string;
   fechaAprobacion: Date | string;
+  textoCompleto?: string;
 }

@@ -1,0 +1,64 @@
+name: consulta
+
+# ============================================================
+#  MODULO DE CONSULTA  (PHP 8 MVC + PostgreSQL)
+#  Ejecuta desde esta carpeta (docker/consulta):
+#      docker compose up -d --build
+# ============================================================
+
+services:
+
+  postgres:
+    image: postgres:16
+    container_name: gd_postgres
+    environment:
+      POSTGRES_USER: appuser
+      POSTGRES_PASSWORD: Postgr3s!2026
+      POSTGRES_DB: consulta_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ../../db/postgres:/docker-entrypoint-initdb.d:ro
+    networks:
+      - consulta_net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  app-php:
+    build: ../../src/php-app
+    container_name: gd_php
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: consulta_db
+      DB_USER: appuser
+      DB_PASS: Postgr3s!2026
+      CENTRAL_URL: http://gd_dotnet:5080     # ahora el .NET es un contenedor en gd_backbone
+      API_KEY: clave-interna-2026
+    ports:
+      - "8080:8080"
+    volumes:
+      - ../../src/php-app:/app
+    networks:
+      - consulta_net
+      - gd_backbone
+    depends_on:
+      - postgres
+    restart: unless-stopped
+
+volumes:
+  pg_data:
+    external: true
+    name: gestion-documental_pg_data
+
+networks:
+  consulta_net:
+    driver: bridge
+  gd_backbone:
+    external: true

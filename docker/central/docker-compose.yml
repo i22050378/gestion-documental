@@ -1,0 +1,65 @@
+name: central
+
+# ============================================================
+#  MODULO CENTRAL  (.NET 10 MVC + SQL Server)
+#  Independiente: arranca con su propio "docker compose up".
+#  Se comunica con los otros modulos por la red comun "gd_backbone".
+#
+#  Ejecuta desde esta carpeta (docker/central):
+#      docker compose up -d --build
+# ============================================================
+
+services:
+
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: gd_sqlserver
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "Str0ng!Passw0rd_2026"
+      MSSQL_PID: "Developer"
+    ports:
+      - "14330:1433"
+    volumes:
+      - mssql_data:/var/opt/mssql
+    networks:
+      - central_net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"Str0ng!Passw0rd_2026\" -C -Q \"SELECT 1\" || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 40s
+
+  app-dotnet:
+    build: ../../src/dotnet-core
+    container_name: gd_dotnet
+    environment:
+      ASPNETCORE_URLS: http://0.0.0.0:5080
+      ConnectionStrings__CentralDB: "Server=sqlserver,1433;Database=CentralDB;User Id=sa;Password=Str0ng!Passw0rd_2026;TrustServerCertificate=True"
+      Indexacion__BaseUrl: http://gd_node:4000
+      Consulta__BaseUrl: http://gd_php:8080
+      ApiInterna__Clave: clave-interna-2026
+    ports:
+      - "5080:5080"
+    networks:
+      - central_net                 # para hablar con su SQL Server
+      - gd_backbone                 # red comun para los otros modulos
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    restart: unless-stopped
+
+# ---------- Volumen: reusa los datos que YA tienes (esquema + documentos) ----------
+volumes:
+  mssql_data:
+    external: true
+    name: gestion-documental_mssql_data
+
+# ---------- Redes ----------
+networks:
+  central_net:
+    driver: bridge
+  gd_backbone:
+    external: true

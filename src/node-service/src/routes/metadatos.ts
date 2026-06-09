@@ -17,13 +17,28 @@ metadatosRouter.get("/metadatos", async (req: Request, res: Response) => {
 
     if (req.query.empresa) filtro.idEmpresa = Number(req.query.empresa);
     if (req.query.etiqueta) filtro.etiquetas = String(req.query.etiqueta);
-    if (req.query.q) filtro.$text = { $search: String(req.query.q) };
+    if (req.query.q) {
+      // Busca el texto en el titulo, las etiquetas y DENTRO del contenido del documento.
+      const term = String(req.query.q).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const rx = new RegExp(term, "i");
+      filtro.$or = [{ titulo: rx }, { etiquetas: rx }, { textoCompleto: rx }];
+    }
 
-    const datos = await col
+    const crudos = await col
       .find(filtro)
       .sort({ fechaAprobacion: -1 })
       .limit(100)
       .toArray();
+
+    // El texto completo puede ser largo: no lo mandamos en la lista,
+    // solo avisamos si existe (tieneTexto) para mostrar los botones en el panel.
+    const datos = crudos.map((d) => {
+      const { textoCompleto, ...resto } = d as Record<string, unknown>;
+      return {
+        ...resto,
+        tieneTexto: typeof textoCompleto === "string" && textoCompleto.length > 0,
+      };
+    });
 
     res.json({ total: datos.length, datos });
   } catch (err) {
@@ -75,6 +90,7 @@ metadatosRouter.post("/metadatos", async (req: Request, res: Response) => {
       etiquetas: Array.isArray(b.etiquetas) ? b.etiquetas.map(String) : [],
       nombreArchivo: String(b.nombreArchivo ?? ""),
       extension: String(b.extension ?? ""),
+      textoCompleto: typeof b.textoCompleto === "string" ? b.textoCompleto : "",
       subidoPor: String(b.subidoPor ?? ""),
       fechaSubida: b.fechaSubida ? new Date(b.fechaSubida) : new Date(),
       fechaAprobacion: b.fechaAprobacion ? new Date(b.fechaAprobacion) : new Date(),
@@ -96,5 +112,28 @@ metadatosRouter.post("/metadatos", async (req: Request, res: Response) => {
     });
   } catch (err) {
     res.status(500).json({ error: "Error guardando metadato", detalle: String(err) });
+  }
+});
+
+// GET /api/versiones/:idVersion/texto
+//   Devuelve el texto extraido del documento. Con ?descargar=1 lo baja como .txt.
+metadatosRouter.get("/versiones/:idVersion/texto", async (req: Request, res: Response) => {
+  try {
+    const idVersion = Number(req.params.idVersion);
+    const col = getDb().collection(COLECCION);
+    const doc = await col.findOne({ idVersionCentral: idVersion });
+
+    if (!doc) {
+      return res.status(404).type("text/plain; charset=utf-8").send("Documento no encontrado.");
+    }
+
+    const texto = typeof doc.textoCompleto === "string" ? doc.textoCompleto : "";
+    res.type("text/plain; charset=utf-8");
+    if (req.query.descargar) {
+      res.setHeader("Content-Disposition", `attachment; filename="texto-v${idVersion}.txt"`);
+    }
+    res.send(texto.length > 0 ? texto : "(Este documento no tiene texto extraido.)");
+  } catch (err) {
+    res.status(500).type("text/plain; charset=utf-8").send("Error obteniendo el texto: " + String(err));
   }
 });
