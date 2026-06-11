@@ -11,9 +11,17 @@
     {
         <p>Como Admin, usa el menu de arriba para gestionar <strong>Usuarios</strong> y <strong>Empresas</strong>, y para ver los <strong>Documentos</strong> de todas las empresas.</p>
     }
-    else if (User.IsInRole("Supervisor") || User.IsInRole("Director"))
+    else if (User.IsInRole("Supervisor"))
     {
         <p>Entra a <strong>Documentos</strong> para crear y subir documentos de tu empresa.</p>
+    }
+    else if (User.IsInRole("Revisor"))
+    {
+        <p>Entra a <strong>Documentos</strong> para <strong>revisar</strong> los documentos pendientes y pasarlos al Aprobador.</p>
+    }
+    else if (User.IsInRole("Aprobador"))
+    {
+        <p>Entra a <strong>Documentos</strong> para dar la <strong>aprobacion final</strong> a los documentos ya revisados.</p>
     }
     else
     {

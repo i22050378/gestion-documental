@@ -37,7 +37,7 @@ public class BitacoraController : Controller
         {
             // Admin ve todo
         }
-        else if (User.IsInRole("Director"))
+        else if (User.IsInRole("Director") || User.IsInRole("Aprobador") || User.IsInRole("Revisor"))
         {
             var empresa = EmpresaActual();
             var idsEmpresa = await _db.Usuarios

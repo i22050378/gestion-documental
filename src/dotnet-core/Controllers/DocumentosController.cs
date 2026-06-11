@@ -43,6 +43,28 @@ public class DocumentosController : Controller
     private async Task<int> EstadoIdAsync(string nombre) =>
         await _db.Estados.Where(e => e.Nombre == nombre).Select(e => e.IdEstado).FirstAsync();
 
+    // Devuelve los IdUsuario activos que tienen cierto rol dentro de una empresa.
+    // Sirve para avisar (notificar) al Revisor o al Aprobador segun el paso del flujo.
+    private async Task<List<int>> IdsUsuariosPorRolAsync(string rol, int? idEmpresa) =>
+        await _db.Usuarios
+            .Where(u => u.Activo && u.IdEmpresa == idEmpresa && u.Rol != null && u.Rol.Nombre == rol)
+            .Select(u => u.IdUsuario)
+            .ToListAsync();
+
+    // Crea una notificacion para cada usuario de la lista.
+    private void NotificarUsuarios(IEnumerable<int> idsUsuarios, string mensaje, int idVersion)
+    {
+        foreach (var uid in idsUsuarios)
+            _db.Notificaciones.Add(new Notificacion
+            {
+                IdUsuario = uid,
+                Mensaje = mensaje,
+                IdVersion = idVersion,
+                Leida = false,
+                FechaCreacion = DateTime.UtcNow
+            });
+    }
+
     // ---------- Lista ----------
     public async Task<IActionResult> Index()
     {
@@ -171,12 +193,13 @@ public class DocumentosController : Controller
         }
 
         bool mismaEmpresa = doc.IdEmpresa == idEmpresa;
-        vm.PuedeAprobar = User.IsInRole("Director") && mismaEmpresa && vm.EstadoUltima == "Pendiente";
-        vm.PuedeSubirNueva = (User.IsInRole("Supervisor") || User.IsInRole("Director"))
+        vm.PuedeRevisar = User.IsInRole("Revisor") && mismaEmpresa && vm.EstadoUltima == "Pendiente de revision";
+        vm.PuedeAprobar = User.IsInRole("Aprobador") && mismaEmpresa && vm.EstadoUltima == "Pendiente de aprobacion";
+        vm.PuedeSubirNueva = User.IsInRole("Supervisor")
                              && mismaEmpresa && vm.EstadoUltima == "Rechazado";
         vm.PuedeReportarError = mismaEmpresa && vm.EstadoUltima == "Aprobado";
         vm.PuedePrerrevisar = (User.IsInRole("Empleado") || User.IsInRole("Supervisor"))
-                              && mismaEmpresa && vm.EstadoUltima == "Pendiente";
+                              && mismaEmpresa && vm.EstadoUltima == "Pendiente de revision";
 
         await _bitacora.RegistrarAsync("ABRIR", "DOCUMENTO", vm.IdDocumento, vm.Titulo);
         return View(vm);
@@ -184,7 +207,7 @@ public class DocumentosController : Controller
 
     // ---------- Crear documento (version 1) ----------
     [HttpGet]
-    [Authorize(Roles = "Supervisor,Director")]
+    [Authorize(Roles = "Supervisor")]
     public async Task<IActionResult> Create()
     {
         var vm = new DocumentoFormViewModel
@@ -195,7 +218,7 @@ public class DocumentosController : Controller
     }
 
     [HttpPost]
-    [Authorize(Roles = "Supervisor,Director")]
+    [Authorize(Roles = "Supervisor")]
     public async Task<IActionResult> Create(DocumentoFormViewModel vm)
     {
         vm.Categorias = await _db.Categorias.OrderBy(c => c.Nombre).ToListAsync();
@@ -220,7 +243,7 @@ public class DocumentosController : Controller
             return View(vm);
         }
 
-        var idPendiente = await EstadoIdAsync("Pendiente");
+        var idPendiente = await EstadoIdAsync("Pendiente de revision");
 
         using var ms = new MemoryStream();
         await vm.Archivo.CopyToAsync(ms);
@@ -240,8 +263,8 @@ public class DocumentosController : Controller
         documento.Versiones.Add(new DocumentoVersion
         {
             NumeroVersion = 1,
-            VersionMajor = 1,
-            VersionMinor = 0,
+            VersionMajor = 0,
+            VersionMinor = 1,
             IdEstado = idPendiente,
             IdUsuarioSubio = usuario,
             NombreArchivo = Path.GetFileName(vm.Archivo.FileName),
@@ -255,13 +278,110 @@ public class DocumentosController : Controller
         _db.Documentos.Add(documento);
         await _db.SaveChangesAsync();
 
+        // Avisar a los Revisores de la empresa que hay un documento nuevo por revisar.
+        var versionCreada = documento.Versiones.First();
+        var revisores = await IdsUsuariosPorRolAsync("Revisor", documento.IdEmpresa);
+        NotificarUsuarios(revisores,
+            $"Hay un documento nuevo por revisar: \"{documento.Titulo}\" (v{versionCreada.VersionMajor}.{versionCreada.VersionMinor}).",
+            versionCreada.IdVersion);
+        await _db.SaveChangesAsync();
+
         await _bitacora.RegistrarAsync("SUBIR", "DOCUMENTO", documento.IdDocumento, documento.Titulo);
         return RedirectToAction("Index");
     }
 
-    // ---------- Aprobar (Director) ----------
+    // ---------- Revisar: el Revisor PASA el documento al Aprobador ----------
     [HttpPost]
-    [Authorize(Roles = "Director")]
+    [Authorize(Roles = "Revisor")]
+    public async Task<IActionResult> RevisarPasar(int idVersion)
+    {
+        var version = await _db.Versiones.FirstOrDefaultAsync(v => v.IdVersion == idVersion);
+        if (version == null) return NotFound();
+
+        var doc = await _db.Documentos.FirstOrDefaultAsync(d => d.IdDocumento == version.IdDocumento);
+        if (doc == null) return NotFound();
+        if (doc.IdEmpresa != EmpresaActual()) return Forbid();
+
+        var idPendienteRev = await EstadoIdAsync("Pendiente de revision");
+        if (version.IdEstado != idPendienteRev)
+            return RedirectToAction("Detalle", new { id = version.IdDocumento });
+
+        // Pasa a esperar la aprobacion final (no cambia el numero de version todavia).
+        version.IdEstado = await EstadoIdAsync("Pendiente de aprobacion");
+        version.IdUsuarioRevisor = UsuarioActual();
+        version.FechaRevision = DateTime.UtcNow;
+
+        _db.Revisiones.Add(new Revision
+        {
+            IdVersion = version.IdVersion,
+            IdUsuario = UsuarioActual(),
+            Tipo = "REVISION_OK",
+            Comentario = null,
+            FechaHora = DateTime.UtcNow
+        });
+
+        // Avisar a los Aprobadores de la empresa que hay un documento por aprobar.
+        var aprobadores = await IdsUsuariosPorRolAsync("Aprobador", doc.IdEmpresa);
+        NotificarUsuarios(aprobadores,
+            $"El documento \"{doc.Titulo}\" (v{version.VersionMajor}.{version.VersionMinor}) paso la revision y espera tu aprobacion.",
+            version.IdVersion);
+
+        await _db.SaveChangesAsync();
+        await _bitacora.RegistrarAsync("REVISADO", "VERSION", version.IdVersion, doc.Titulo);
+        return RedirectToAction("Detalle", new { id = version.IdDocumento });
+    }
+
+    // ---------- Revisar: el Revisor RECHAZA el documento ----------
+    [HttpPost]
+    [Authorize(Roles = "Revisor")]
+    public async Task<IActionResult> RevisarRechazar(int idVersion, string? comentario)
+    {
+        var version = await _db.Versiones.FirstOrDefaultAsync(v => v.IdVersion == idVersion);
+        if (version == null) return NotFound();
+
+        var doc = await _db.Documentos.FirstOrDefaultAsync(d => d.IdDocumento == version.IdDocumento);
+        if (doc == null) return NotFound();
+        if (doc.IdEmpresa != EmpresaActual()) return Forbid();
+
+        var idPendienteRev = await EstadoIdAsync("Pendiente de revision");
+        if (version.IdEstado != idPendienteRev)
+            return RedirectToAction("Detalle", new { id = version.IdDocumento });
+
+        if (string.IsNullOrWhiteSpace(comentario))
+        {
+            TempData["Error"] = "Debes escribir el motivo del rechazo.";
+            return RedirectToAction("Detalle", new { id = version.IdDocumento });
+        }
+
+        version.IdEstado = await EstadoIdAsync("Rechazado");
+        version.IdUsuarioRevisor = UsuarioActual();
+        version.FechaRevision = DateTime.UtcNow;
+
+        _db.Revisiones.Add(new Revision
+        {
+            IdVersion = version.IdVersion,
+            IdUsuario = UsuarioActual(),
+            Tipo = "RECHAZO_REVISION",
+            Comentario = comentario.Trim(),
+            FechaHora = DateTime.UtcNow
+        });
+        _db.Notificaciones.Add(new Notificacion
+        {
+            IdUsuario = version.IdUsuarioSubio,
+            Mensaje = $"Tu documento \"{doc.Titulo}\" (v{version.VersionMajor}.{version.VersionMinor}) fue RECHAZADO en la revision: {comentario.Trim()}",
+            IdVersion = version.IdVersion,
+            Leida = false,
+            FechaCreacion = DateTime.UtcNow
+        });
+
+        await _db.SaveChangesAsync();
+        await _bitacora.RegistrarAsync("RECHAZAR", "VERSION", version.IdVersion, doc.Titulo);
+        return RedirectToAction("Detalle", new { id = version.IdDocumento });
+    }
+
+    // ---------- Aprobar (Aprobador, paso final) ----------
+    [HttpPost]
+    [Authorize(Roles = "Aprobador")]
     public async Task<IActionResult> Aprobar(int idVersion)
     {
         var version = await _db.Versiones.FirstOrDefaultAsync(v => v.IdVersion == idVersion);
@@ -271,7 +391,7 @@ public class DocumentosController : Controller
         if (doc == null) return NotFound();
         if (doc.IdEmpresa != EmpresaActual()) return Forbid();
 
-        var idPendiente = await EstadoIdAsync("Pendiente");
+        var idPendiente = await EstadoIdAsync("Pendiente de aprobacion");
         if (version.IdEstado != idPendiente)
             return RedirectToAction("Detalle", new { id = version.IdDocumento });
 
@@ -283,8 +403,9 @@ public class DocumentosController : Controller
             .Where(v => v.IdDocumento == doc.IdDocumento && v.IdEstado == idAprobado && v.IdVersion != version.IdVersion)
             .ExecuteUpdateAsync(s => s.SetProperty(v => v.IdEstado, idObsoleto));
 
-        // Numeracion: si hubo correcciones (decimal > 0) sube a la siguiente entera
-        // (ej. 1.2 -> 2.0). Si se aprueba tal cual, sin rechazos, se queda (ej. 1.0).
+        // Numeracion: el documento arranca en 0.1 y sube de decimal con cada
+        // correccion (0.1 -> 0.2 ...). Al APROBARSE pasa a la siguiente entera
+        // (0.1 -> 1.0, 1.2 -> 2.0). Asi un aprobado siempre es un numero entero.
         if (version.VersionMinor > 0)
         {
             version.VersionMajor += 1;
@@ -381,9 +502,9 @@ public class DocumentosController : Controller
         return RedirectToAction("Detalle", new { id = version.IdDocumento });
     }
 
-    // ---------- Rechazar (Director) ----------
+    // ---------- Rechazar (Aprobador, paso final) ----------
     [HttpPost]
-    [Authorize(Roles = "Director")]
+    [Authorize(Roles = "Aprobador")]
     public async Task<IActionResult> Rechazar(int idVersion, string? comentario)
     {
         var version = await _db.Versiones.FirstOrDefaultAsync(v => v.IdVersion == idVersion);
@@ -393,7 +514,7 @@ public class DocumentosController : Controller
         if (doc == null) return NotFound();
         if (doc.IdEmpresa != EmpresaActual()) return Forbid();
 
-        var idPendiente = await EstadoIdAsync("Pendiente");
+        var idPendiente = await EstadoIdAsync("Pendiente de aprobacion");
         if (version.IdEstado != idPendiente)
             return RedirectToAction("Detalle", new { id = version.IdDocumento });
 
@@ -433,7 +554,7 @@ public class DocumentosController : Controller
 
     // ---------- Subir nueva version (cuando la ultima fue rechazada) ----------
     [HttpPost]
-    [Authorize(Roles = "Supervisor,Director")]
+    [Authorize(Roles = "Supervisor")]
     public async Task<IActionResult> NuevaVersion(int idDocumento, IFormFile? archivo)
     {
         var doc = await _db.Documentos.FirstOrDefaultAsync(d => d.IdDocumento == idDocumento && d.Activo);
@@ -466,13 +587,13 @@ public class DocumentosController : Controller
             return RedirectToAction("Detalle", new { id = idDocumento });
         }
 
-        var idPendiente = await EstadoIdAsync("Pendiente");
+        var idPendiente = await EstadoIdAsync("Pendiente de revision");
 
         using var ms = new MemoryStream();
         await archivo.CopyToAsync(ms);
         var bytes = ms.ToArray();
 
-        _db.Versiones.Add(new DocumentoVersion
+        var nuevaVersion = new DocumentoVersion
         {
             IdDocumento = idDocumento,
             NumeroVersion = ultima.NumeroVersion + 1,
@@ -486,8 +607,15 @@ public class DocumentosController : Controller
             Archivo = bytes,
             FechaSubida = DateTime.UtcNow,
             Activo = true
-        });
+        };
+        _db.Versiones.Add(nuevaVersion);
+        await _db.SaveChangesAsync();
 
+        // La correccion vuelve a empezar el flujo: avisar a los Revisores.
+        var revisoresNV = await IdsUsuariosPorRolAsync("Revisor", doc.IdEmpresa);
+        NotificarUsuarios(revisoresNV,
+            $"Hay una version corregida por revisar: \"{doc.Titulo}\" (v{nuevaVersion.VersionMajor}.{nuevaVersion.VersionMinor}).",
+            nuevaVersion.IdVersion);
         await _db.SaveChangesAsync();
 
         await _bitacora.RegistrarAsync("NUEVA_VERSION", "DOCUMENTO", idDocumento, doc.Titulo);
@@ -563,7 +691,7 @@ public class DocumentosController : Controller
         if (doc == null) return NotFound();
         if (doc.IdEmpresa != EmpresaActual()) return Forbid();
 
-        var idPendiente = await EstadoIdAsync("Pendiente");
+        var idPendiente = await EstadoIdAsync("Pendiente de revision");
         if (info.IdEstado != idPendiente)
             return RedirectToAction("Detalle", new { id = info.IdDocumento });
 

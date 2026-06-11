@@ -2,7 +2,7 @@
 @{
     ViewData["Title"] = "Documentos";
     bool esAdmin = (bool)(ViewData["EsAdmin"] ?? false);
-    bool puedeCrear = User.IsInRole("Supervisor") || User.IsInRole("Director");
+    bool puedeCrear = User.IsInRole("Supervisor");
 }
 
 <div class="card">

@@ -29,18 +29,31 @@
     .Rechazado { background: #fee2e2; color: #991b1b; }
     .meta { color: #64748b; font-size: 13px; margin: 6px 0 0; }
     .vacio { color: #64748b; padding: 12px 0; }
+    mark { background: #fde047; color: #1c1c28; padding: 0 2px; border-radius: 2px; }
+    .badge { display: inline-block; padding: 2px 9px; border-radius: 10px; font-size: 12px; font-weight: 600; margin: 1px 4px 1px 0; }
+    .bt { background: #dbeafe; color: #1e40af; }
+    .be { background: #ede9fe; color: #5b21b6; }
+    .bc { background: #dcfce7; color: #166534; }
+    tr.detalle td { background: #f8faff; border-bottom: 2px solid #e5e7eb; padding-top: 6px; }
+    .coinc { font-size: 13px; color: #334155; margin-bottom: 6px; }
+    .frags { display: flex; flex-direction: column; gap: 5px; margin: 4px 0; }
+    .frag { font-size: 13px; line-height: 1.5; background: #fff; border: 1px solid #eef0f4; border-radius: 7px; padding: 6px 9px; }
+    .frag .ctx { color: #475569; }
+    .frag .pos { display: inline-block; margin-left: 8px; color: #94a3b8; font-size: 11.5px; white-space: nowrap; }
+    a.verres { display: inline-block; margin-top: 8px; font-size: 13px; color: #4338ca; font-weight: 600; text-decoration: none; }
+    a.verres:hover { text-decoration: underline; }
   </style>
 </head>
 <body>
   <header>
     <h1>Panel de Indexacion y Busqueda</h1>
-    <p>Modulo de metadatos · busca documentos por titulo, etiqueta o empresa</p>
+    <p>Modulo de metadatos · busca por titulo, etiqueta o por una palabra dentro del documento</p>
   </header>
 
   <main>
     <div class="card">
       <div class="buscador">
-        <input type="text" id="q" placeholder="Buscar por titulo o etiqueta...">
+        <input type="text" id="q" placeholder="Buscar palabra (titulo, etiqueta o dentro del documento)...">
         <input type="text" id="empresa" placeholder="Empresa (opcional)">
         <input type="text" id="etiqueta" placeholder="Etiqueta (opcional)">
         <button class="btn" id="btnBuscar">Buscar</button>
@@ -93,6 +106,36 @@
       }
     }
 
+    function fragmentoHTML(f) {
+      return '<div class="frag"><span class="ctx">' + escapar(f.antes) + '</span>' +
+             '<mark>' + escapar(f.coincidencia) + '</mark>' +
+             '<span class="ctx">' + escapar(f.despues) + '</span>' +
+             '<span class="pos">\u2248 ' + f.porcentaje + '% del documento</span></div>';
+    }
+
+    function filaCoincidencia(d) {
+      const c = d.coincidencias;
+      if (!c) return "";
+      const badges = [];
+      if (c.enTitulo)    badges.push('<span class="badge bt">En el titulo</span>');
+      if (c.enEtiquetas) badges.push('<span class="badge be">En una etiqueta</span>');
+      if (c.enCuerpo)    badges.push('<span class="badge bc">En el contenido &middot; ' + c.vecesEnCuerpo + (c.vecesEnCuerpo === 1 ? ' vez' : ' veces') + '</span>');
+      let frags = "";
+      if (c.enCuerpo && c.fragmentos && c.fragmentos.length) {
+        frags = '<div class="frags">' + c.fragmentos.map(fragmentoHTML).join("") + '</div>';
+        if (c.vecesEnCuerpo > c.fragmentos.length) {
+          frags += '<p class="meta">\u2026 y ' + (c.vecesEnCuerpo - c.fragmentos.length) + ' aparicion(es) mas dentro del documento.</p>';
+        }
+      }
+      const verRes = (d.tieneTexto && c.enCuerpo)
+        ? '<a class="verres" href="/api/versiones/' + encodeURIComponent(d.idVersionCentral) + '/ver?resaltar=' + encodeURIComponent(c.termino) + '" target="_blank">Abrir documento con la palabra resaltada \u2192</a>'
+        : '';
+      return '<tr class="detalle"><td colspan="8">' +
+        '<div class="coinc">Coincide en: ' + (badges.join(" ") || '<span class="meta">\u2014</span>') + '</div>' +
+        frags + verRes +
+      '</td></tr>';
+    }
+
     function render(docs) {
       if (!docs.length) {
         $("cuerpo").innerHTML = '<tr><td colspan="8" class="vacio">No se encontraron documentos.</td></tr>';
@@ -101,8 +144,10 @@
       $("cuerpo").innerHTML = docs.map(d => {
         const tags = (d.etiquetas || []).map(t => '<span class="chip">' + escapar(t) + '</span>').join("");
         const estado = escapar(d.estado || "");
+        const q = (d.coincidencias && d.coincidencias.termino) || "";
+        const verHref = '/api/versiones/' + encodeURIComponent(d.idVersionCentral) + '/ver' + (q ? '?resaltar=' + encodeURIComponent(q) : '');
         const textoLinks = d.tieneTexto
-          ? '<a href="/api/versiones/' + encodeURIComponent(d.idVersionCentral) + '/texto" target="_blank">Ver texto</a> &nbsp; ' +
+          ? '<a href="' + verHref + '" target="_blank">Ver texto</a> &nbsp; ' +
             '<a href="/api/versiones/' + encodeURIComponent(d.idVersionCentral) + '/texto?descargar=1">Descargar .txt</a>'
           : '<span style="color:#94a3b8;">&mdash;</span>';
         return '<tr>' +
@@ -114,7 +159,7 @@
           '<td>' + tags + '</td>' +
           '<td>' + escapar(d.nombreArchivo) + '</td>' +
           '<td>' + textoLinks + '</td>' +
-        '</tr>';
+        '</tr>' + filaCoincidencia(d);
       }).join("");
     }
 

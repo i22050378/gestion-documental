@@ -16,10 +16,11 @@ public class DocumentoDetalleViewModel
     public int IdUltimaVersion { get; set; }
     public string EstadoUltima { get; set; } = "";
 
-    public bool PuedeAprobar { get; set; }       // Director, misma empresa, ultima = Pendiente
-    public bool PuedeSubirNueva { get; set; }    // Supervisor/Director, misma empresa, ultima = Rechazado
+    public bool PuedeRevisar { get; set; }       // Revisor, misma empresa, ultima = Pendiente de revision
+    public bool PuedeAprobar { get; set; }       // Aprobador, misma empresa, ultima = Pendiente de aprobacion
+    public bool PuedeSubirNueva { get; set; }    // Supervisor, misma empresa, ultima = Rechazado
     public bool PuedeReportarError { get; set; } // misma empresa, ultima = Aprobado
-    public bool PuedePrerrevisar { get; set; }   // Empleado/Supervisor, misma empresa, ultima = Pendiente
+    public bool PuedePrerrevisar { get; set; }   // Empleado/Supervisor, misma empresa, ultima = Pendiente de revision
 }
 
 public class VersionRow
